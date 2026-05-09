@@ -145,18 +145,9 @@ Restart (or rely on auto-reload) and the worker will discover the skill on the n
 
 ## Managing skills from CLI chat
 
-Ask in chat — no separate CLI to learn. Mossy uses **`skill-manager`**, which runs `mossy/skills/skill-manager/scripts/manage_skills.py`:
+Mossy has a **`skill-manager`** skill, so you can manage skills by talking to it. Ask naturally to install, remove, list, or explain skills.
 
-| Command | Purpose |
-| --- | --- |
-| `list` | Installed skills vs `repository/` only |
-| `info <name>` | One skill's title and description |
-| `install <name>` | Copy into `mossy/skills/` |
-| `uninstall <name>` | Remove installed copy |
-
-Examples:
-
-> List what's installed and what's only in the repository folder.  
-> Install `my-skill` from the repo.
-
-See `mossy/skills/skill-manager/SKILL.md` for configuration.
+> List what's installed and what's available to install.  
+> What does the `weather` skill do?  
+> Install the `calendar` skill.  
+> Let's remove the `old-notes` skill.
