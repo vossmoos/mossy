@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import os
+import sys
 from typing import TYPE_CHECKING
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from rich.console import Console
-from rich.text import Text
 
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
@@ -66,10 +66,23 @@ def _mossy_output_style() -> str:
     return "bright_green"
 
 
-def _user_prompt_style() -> str | None:
+def _user_input_ansi_prefix() -> str:
+    """ANSI SGR for echoed stdin text + prompt (Rich cannot style typed characters)."""
     if _terminal_foreground_is_green():
-        return "bright_blue"
-    return None
+        return "\033[38;5;39m"  # vivid blue — readable when terminal fg is already green
+    # Mid green: brighter than the old forest tone (readable on black), still calmer than Mossy’s bright_green.
+    return "\033[38;2;58;160;98m"
+
+
+def _read_cli_line_sync() -> str:
+    sys.stdout.write(_user_input_ansi_prefix())
+    sys.stdout.write("> ")
+    sys.stdout.flush()
+    try:
+        return input()
+    finally:
+        sys.stdout.write("\033[0m")
+        sys.stdout.flush()
 
 
 async def stdin_loop(runtime: "Runtime") -> None:
@@ -86,14 +99,12 @@ async def stdin_loop(runtime: "Runtime") -> None:
     history: list[ModelMessage] = []
     console = Console()
     mossy_style = _mossy_output_style()
-    user_prompt_style = _user_prompt_style()
-    prompt = Text("> ", style=user_prompt_style)
 
     console.print("Mossy CLI — chat mode. Use /quit to exit.\n", style=mossy_style)
 
     while True:
         try:
-            line = await asyncio.to_thread(console.input, prompt)
+            line = await asyncio.to_thread(_read_cli_line_sync)
         except (KeyboardInterrupt, EOFError):
             console.print("\nbye.", style=mossy_style)
             return
