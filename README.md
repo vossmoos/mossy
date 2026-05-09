@@ -1,8 +1,8 @@
 # Mossy
 
-> A lightweight, skill-first platform for building autonomous agents that work in teams — across any channel.
+> A lightweight engine for turning Markdown skills into agent behavior.
 
-Mossy is a tiny runtime for autonomous agents that **think with skills**, **talk through channels**, and **collaborate through a shared task queue**. No graphs, no DAGs, no framework lock-in. Just a worker, a queue, and a folder of Markdown skills your agents discover and load on demand.
+Mossy is for developers who want to spend their time shaping **skills**, not rebuilding the agent around them. It is not a broad agent framework; it is a skill engine with an agent loop around it: a worker, a queue, and a folder of Markdown skills that the agent discovers, loads, and follows on demand.
 
 - **Lightweight.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai).
 - **Skill-oriented.** Every capability is a `SKILL.md` the agent reads at runtime. Drop a folder, get a new skill.
@@ -13,7 +13,7 @@ Mossy is a tiny runtime for autonomous agents that **think with skills**, **talk
 
 ## What Mossy is for
 
-Mossy is for builders who want **autonomous agents in production** without adopting a heavyweight framework.
+Mossy is for builders who already have a simple agent loop, but want the main customization surface to be **skills**. Instead of editing agent code for every new behavior, you add or change a `SKILL.md`.
 
 You get one `Runtime` that:
 
@@ -22,7 +22,7 @@ You get one `Runtime` that:
 3. Hands them to a worker agent that loads only the skills it needs.
 4. Lets that agent enqueue follow-up work, spawn teammates, or hand off to another channel.
 
-If you've ever wanted "a small Slack-bot-shaped thing that can also run a background queue, expose an HTTP endpoint, and grow new abilities by dropping a Markdown file" — that's Mossy.
+If you've ever wanted "a small agent that can answer in chat, run background tasks, and grow new abilities by dropping a Markdown file" — that's Mossy.
 
 ---
 
@@ -45,7 +45,7 @@ That's the whole platform. Everything else is a skill.
 
 ## Install
 
-Requires Python 3.11+ and an OpenAI API key (for the default model).
+Requires Python 3.11+. Mossy uses OpenAI by default, but model names are passed to Pydantic AI, so you can use any supported provider in Pydantic AI's `provider:model` format.
 
 ```bash
 git clone <your-fork-or-this-repo> mossy
@@ -57,8 +57,10 @@ source .venv/bin/activate
 pip install -r requirements.txt
 
 cp .env.example .env
-# then edit .env and set OPENAI_API_KEY=sk-...
+# then edit .env and set OPENAI_API_KEY=sk-... for the default OpenAI model
 ```
+
+To use another Pydantic AI-supported provider, set `PLATFORMER_SKILL_MODEL` and `PLATFORMER_CLI_MODEL` in `.env`, for example `anthropic:claude-...` or another provider/model string supported by Pydantic AI.
 
 ## Run
 
@@ -106,28 +108,18 @@ You'll see:
 Mossy CLI — chat mode. Use /quit to exit.
 ```
 
-Now talk to it. The CLI agent has access to Mossy's skills and runtime-control tools, so it can answer directly, queue background work, or inspect the queue.
+Now ask a simple question:
 
 ```text
-> hi mossy, what can you do?
-I'm Mossy. I can answer directly, run skills (echo, planner, queue-status, …),
-or queue background tasks for the worker. Try asking me to plan something or
-to show the queue.
-
-> plan a 3-step research task about local mushrooms and queue it
-Queued 3 tasks:
-  1. abc123 — gather common species in the region
-  2. def456 — collect identification tips (depends on abc123)
-  3. ghi789 — draft a beginner-friendly summary (depends on def456)
-
-> what's in the queue?
-3 pending tasks. Worker is currently running abc123.
+> what skills can you use?
+I can load skills from mossy/skills, such as echo, planner, queue-status,
+and filesystem. Ask me a question or tell me what task to run.
 
 > /quit
 bye.
 ```
 
-While you chat, the **worker** is independently picking tasks off the queue and resolving them with skills — that's the multichannel, team-of-agents loop in action. The same tasks are visible at `GET /queue` and `GET /status/{task_id}`.
+The CLI chat is the fastest way to try Mossy. For background work, the **worker** picks tasks off the queue and resolves them with skills. The same tasks are visible at `GET /queue` and `GET /status/{task_id}`.
 
 ---
 
