@@ -26,12 +26,15 @@ Configure where to read “not installed” skills:
 Run the bundled script from the workspace root (or any cwd—the script resolves paths from its location):
 
 ```bash
+python mossy/skills/skill-manager/scripts/manage_skills.py
 python mossy/skills/skill-manager/scripts/manage_skills.py list
 python mossy/skills/skill-manager/scripts/manage_skills.py info <folder-name>
 python mossy/skills/skill-manager/scripts/manage_skills.py install <folder-name>
 python mossy/skills/skill-manager/scripts/manage_skills.py install <folder-name> --force
 python mossy/skills/skill-manager/scripts/manage_skills.py uninstall <folder-name>
 ```
+
+Calling the script with **no arguments** is equivalent to `list` — useful when the runner cannot pass extra argv tokens after the script path.
 
 Script output is JSON on stdout; errors print JSON on stderr and exit non-zero.
 

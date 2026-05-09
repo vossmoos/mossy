@@ -181,7 +181,7 @@ def cmd_uninstall(name: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage Mossy skills from the repository folder.")
-    sub = parser.add_subparsers(dest="command", required=True)
+    sub = parser.add_subparsers(dest="command", required=False)
 
     sub.add_parser("list", help="List installed, repository, and not-yet-installed skill names.")
 
@@ -196,13 +196,14 @@ def main() -> None:
     p_un.add_argument("name", help="Skill folder name under mossy/skills/.")
 
     args = parser.parse_args()
-    if args.command == "list":
+    command = args.command or "list"
+    if command == "list":
         cmd_list()
-    elif args.command == "info":
+    elif command == "info":
         cmd_info(args.name)
-    elif args.command == "install":
+    elif command == "install":
         cmd_install(args.name, force=args.force)
-    elif args.command == "uninstall":
+    elif command == "uninstall":
         cmd_uninstall(args.name)
 
 
