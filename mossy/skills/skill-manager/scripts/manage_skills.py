@@ -98,12 +98,18 @@ def cmd_list() -> None:
     installed = set(_skill_dirs(install_dir))
     in_repo = set(_skill_dirs(repo_root))
     not_installed = sorted(in_repo - installed)
+    repo_empty_or_missing = not repo_root.is_dir() or not in_repo
     payload = {
         "install_dir": str(install_dir),
         "repository_root": str(repo_root),
         "installed": sorted(installed),
         "in_repository": sorted(in_repo),
         "not_installed": not_installed,
+        "repository_message": (
+            "The configured repository is empty or does not exist."
+            if repo_empty_or_missing
+            else None
+        ),
     }
     print(json.dumps(payload, indent=2))
 
@@ -135,6 +141,15 @@ def cmd_info(name: str) -> None:
 
 def cmd_install(name: str, *, force: bool) -> None:
     repo_root = _repository_root()
+    if not repo_root.is_dir():
+        print(
+            json.dumps(
+                {"error": "The configured repository does not exist.", "repository_root": str(repo_root)},
+                indent=2,
+            ),
+            file=sys.stderr,
+        )
+        sys.exit(1)
     src = repo_root / name
     if not src.is_dir() or not (src / "SKILL.md").is_file():
         print(json.dumps({"error": f"No skill {name!r} in repository at {repo_root}."}, indent=2), file=sys.stderr)

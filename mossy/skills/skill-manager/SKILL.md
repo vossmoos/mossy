@@ -44,8 +44,9 @@ Run `manage_skills.py list`. Interpret the JSON:
 - `installed`: folder names under `mossy/skills/` that have `SKILL.md`.
 - `in_repository`: folder names under the configured repository root that have `SKILL.md`.
 - `not_installed`: present in the repository but not yet copied into `mossy/skills/`.
+- `repository_message`: when non-null, explains that the configured repository path is missing or has no skill folders with `SKILL.md` — the script **does not create** the repository directory; the user creates `repository-root` (or sets `MOSSY_SKILL_REPOSITORY`) and adds skill folders there.
 
-Summarize these three lists clearly for the user.
+Summarize these three lists clearly for the user. When `repository_message` is set, repeat that sentence to the user verbatim so they know why `in_repository` / `not_installed` are empty.
 
 ### Get details (title + description)
 
