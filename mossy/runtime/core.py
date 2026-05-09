@@ -6,14 +6,17 @@ import asyncio
 import os
 import uuid
 from collections.abc import Collection
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from pydantic_ai import Agent
 from pydantic_ai_skills import SkillsCapability
 
-from mossy.capabilities.runtime_control import runtime_control_capability
+from mossy.capabilities.personality import personality_capability
+from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
+from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, Priority, Task, TaskStatus
 from mossy.runtime.queue import TaskQueue
@@ -51,13 +54,33 @@ class Runtime:
         allow_skills: SkillSelection = "all",
         exclude_skills: Collection[str] | None = None,
     ) -> list[Any]:
-        return [
+        capabilities: list[Any] = [
+            personality_capability(),
             self.skills_capability(
                 allow_skills=allow_skills,
                 exclude_skills=exclude_skills,
             ),
-            runtime_control_capability(self),
         ]
+        if self._allows_skill_tools(
+            "system-queue",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            capabilities.append(system_queue_capability(self))
+        return capabilities
+
+    def _allows_skill_tools(
+        self,
+        skill_name: str,
+        *,
+        allow_skills: SkillSelection,
+        exclude_skills: Collection[str] | None,
+    ) -> bool:
+        if exclude_skills and skill_name in exclude_skills:
+            return False
+        if allow_skills == "all":
+            return True
+        return skill_name in allow_skills
 
     @property
     def worker(self) -> Agent[RuntimeDeps, str]:
@@ -66,10 +89,12 @@ class Runtime:
                 self._worker_model,
                 deps_type=RuntimeDeps,
                 instructions=(
-                    "You are Mossy's queued task worker. Resolve the active task by using skills "
-                    "when useful. Skills are loaded progressively: select a relevant skill, load it, "
-                    "follow its instructions, and call record_task_result when there is structured "
-                    "result data to save. Enqueue follow-up work only when the task truly requires it."
+                    "You are Mossy's queued task worker. Each run begins with a line "
+                    "'[System UTC now: …]' — treat it as the authoritative current time in UTC. "
+                    "Resolve the active task by using skills when useful. Skills are loaded progressively: "
+                    "select a relevant skill, load it, follow its instructions, and call record_task_result "
+                    "when there is structured result data to save. Enqueue follow-up work only when the task "
+                    "truly requires it."
                 ),
             )
         return self._worker
@@ -87,12 +112,14 @@ class Runtime:
         priority: int = int(Priority.AUTONOMOUS),
         depends_on: list[str] | None = None,
         context: dict[str, Any] | None = None,
+        not_before: datetime | None = None,
     ) -> Task:
         task = Task(
             id=str(uuid.uuid4()),
             goal=goal.strip(),
             priority=priority,
             depends_on=depends_on or [],
+            not_before=not_before,
             context=context or {},
         )
         self.tasks[task.id] = task
@@ -107,6 +134,7 @@ class Runtime:
             id=envelope.task_id or str(uuid.uuid4()),
             goal=envelope.payload.strip(),
             priority=int(priority),
+            not_before=envelope.scheduled_for,
             context=context,
         )
 
@@ -125,7 +153,7 @@ class Runtime:
         task = self.tasks.get(task_id)
         if task is None:
             return None
-        if task.status in (TaskStatus.DONE, TaskStatus.FAILED):
+        if task.status in (TaskStatus.DONE, TaskStatus.FAILED, TaskStatus.CANCELLED):
             return task
         task.status = TaskStatus.CANCELLED
         return task
@@ -136,6 +164,8 @@ class Runtime:
     def _ready(self, task: Task) -> bool:
         if task.status == TaskStatus.CANCELLED:
             return True
+        if task.not_before is not None and datetime.now(UTC) < task.not_before:
+            return False
         for dep in task.depends_on:
             parent = self.tasks.get(dep)
             if parent is None or parent.status != TaskStatus.DONE:
@@ -164,7 +194,9 @@ class Runtime:
         try:
             deps = RuntimeDeps(runtime=self, task=task)
             capabilities = [worker_state_capability(task), *self.shared_capabilities()]
-            run = await self.worker.run(task.goal, deps=deps, capabilities=capabilities)
+            run = await run_agent_with_utc(
+                self.worker, task.goal, deps=deps, capabilities=capabilities
+            )
             if run.output is not None:
                 task.result = {**(task.result or {}), "model_output": run.output}
             task.status = TaskStatus.DONE
@@ -183,6 +215,7 @@ class Runtime:
                 goal=str(data["follow_up_goal"]),
                 priority=int(data.get("follow_up_priority", Priority.AUTONOMOUS)),
                 depends_on=list(data.get("follow_up_depends_on") or []),
+                not_before=data.get("follow_up_not_before"),
                 context=dict(data.get("follow_up_context") or {}),
             )
             self.tasks[child.id] = child

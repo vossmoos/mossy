@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic_ai.capabilities.toolset import Toolset
@@ -26,13 +27,18 @@ def worker_state_capability(task: Task) -> Toolset:
         goal: str,
         priority: int = int(Priority.AUTONOMOUS),
         depends_on: list[str] | None = None,
+        scheduled_for: datetime | None = None,
         context: dict[str, Any] | None = None,
     ) -> str:
-        """Request one follow-up task after the current task completes."""
+        """Request one follow-up task after the current task completes.
+
+        Use scheduled_for only for future work. It must be an absolute UTC datetime.
+        """
         data = dict(task.result or {})
         data["follow_up_goal"] = goal
         data["follow_up_priority"] = priority
         data["follow_up_depends_on"] = depends_on or []
+        data["follow_up_not_before"] = scheduled_for
         data["follow_up_context"] = context or {}
         task.result = data
         return "scheduled"

@@ -19,7 +19,7 @@ A handful of small pieces, each doing one thing.
 - **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, and the task lifecycle.
 - **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, and a structured `result`.
 - **Skills** (`mossy/skills/<name>/`) — a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers the folder, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to. Add one by creating a folder.
-- **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents: `runtime-control` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), and the dynamic `skills` capability.
+- **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
   - `http/app.py` — FastAPI endpoints (`/run`, `/status/{id}`, `/queue`, `/health`).
@@ -98,8 +98,8 @@ Now ask a simple question:
 
 ```text
 > what skills can you use?
-I can load skills from mossy/skills, such as echo, planner, queue-status,
-and filesystem. Ask me a question or tell me what task to run.
+I can load skills from mossy/skills, such as echo, planner, system-queue,
+filesystem, and skill-manager. Ask me a question or tell me what task to run.
 
 > /quit
 bye.
@@ -142,4 +142,19 @@ Use whenever the user asks about current or forecast weather.
 See `mossy/skills/filesystem/` for a working example that bundles `SKILL.md` with a `scripts/` folder.
 
 Restart (or rely on auto-reload) and the worker will discover the skill on the next task. That's the whole extension model.
+
+## Managing skills from CLI chat
+
+The **`skill-manager`** skill installs and removes skills without hand-copying folders. It treats the workspace **`repository/`** directory (gitignored by default) as a staging area: each skill there is a folder with `SKILL.md`, same shape as under `mossy/skills/`. Installed skills still live only under `mossy/skills/`; uninstalling removes that copy and leaves `repository/` untouched.
+
+**From CLI chat** (`python main.py`), ask in plain language and Mossy will load `skill-manager` and run the helper script for you. Examples:
+
+- *“List which skills are installed and which are only in the repository.”*
+- *“Show details for the skill in folder `my-tool`.”*
+- *“Install `my-tool` from the repository.”* (uses `install`; add *“replace the installed copy”* if it already exists — that maps to `--force`.)
+- *“Uninstall `my-tool` from Mossy but keep it in the repository.”*
+
+The agent runs `mossy/skills/skill-manager/scripts/manage_skills.py` (`list`, `info`, `install`, `uninstall`) and summarizes the JSON. Run the same commands yourself from the repo root if you prefer the terminal directly.
+
+To change where “not installed” skills are read from, edit `repository-root` in `mossy/skills/skill-manager/SKILL.md`, or set **`MOSSY_SKILL_REPOSITORY`** to an absolute path. See that skill’s `SKILL.md` for full behavior.
 

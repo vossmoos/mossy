@@ -20,13 +20,28 @@ class TaskQueue:
 
     async def pop(self, ready: Callable[[Task], bool]) -> Task:
         while True:
-            prio, ts, seq, task = await self._q.get()
-            if ready(task):
-                return task
+            skipped: list[tuple[int, float, int, Task]] = []
+            item = await self._q.get()
+
+            while True:
+                _prio, _ts, _seq, task = item
+                if ready(task):
+                    await self._push_skipped(skipped)
+                    return task
+
+                skipped.append(item)
+                if self._q.empty():
+                    break
+                item = await self._q.get()
+
+            await self._push_skipped(skipped)
+            await asyncio.sleep(0.01)
+
+    async def _push_skipped(self, skipped: list[tuple[int, float, int, Task]]) -> None:
+        for prio, ts, _seq, task in skipped:
             self._defer += 1e-6
             self._seq += 1
             await self._q.put((prio, ts + self._defer, self._seq, task))
-            await asyncio.sleep(0.01)
 
     def size(self) -> int:
         return self._q.qsize()

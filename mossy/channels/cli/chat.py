@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import os
-import sys
 from typing import TYPE_CHECKING
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
+from rich.console import Console
+from rich.text import Text
 
+from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 
 if TYPE_CHECKING:
@@ -19,11 +21,55 @@ if TYPE_CHECKING:
 _CLI_INSTRUCTIONS = """You are Mossy's interactive terminal assistant.
 
 You have access to agentic skills through the skills tools. Use skills immediately when they help
-answer the user or perform an action. Use runtime-control tools when work should be queued,
+answer the user or perform an action. Use the system-queue skill when work should be queued,
 inspected, cancelled, or allowed to continue independently. Do not enqueue by default: answer
 directly when the request can be resolved in the chat turn.
 
+Each user message is prefixed with `[System UTC now: …]` — use it as the authoritative clock for
+relative scheduling ("in 1 minute", "tomorrow"): compute scheduled_for in UTC from that line, not from
+memory.
+
 Keep terminal output concise."""
+
+
+def _ansi_code_is_green(code: str) -> bool:
+    try:
+        value = int(code)
+    except ValueError:
+        return False
+    return value in {2, 10, 22, 28, 34, 40, 46, 48, 76, 82, 83, 84, 118, 119, 120, 154, 155, 156}
+
+
+def _terminal_background_is_green() -> bool:
+    colorfgbg = os.getenv("COLORFGBG", "")
+    if colorfgbg:
+        background = colorfgbg.split(";")[-1]
+        return _ansi_code_is_green(background)
+
+    background = os.getenv("TERMINAL_BACKGROUND", "").lower()
+    return "green" in background
+
+
+def _terminal_foreground_is_green() -> bool:
+    colorfgbg = os.getenv("COLORFGBG", "")
+    if colorfgbg:
+        foreground = colorfgbg.split(";")[0]
+        return _ansi_code_is_green(foreground)
+
+    foreground = os.getenv("TERMINAL_FOREGROUND", "").lower()
+    return "green" in foreground
+
+
+def _mossy_output_style() -> str:
+    if _terminal_background_is_green():
+        return "#556b2f"  # dark olive green, readable on green terminal backgrounds
+    return "bright_green"
+
+
+def _user_prompt_style() -> str | None:
+    if _terminal_foreground_is_green():
+        return "bright_blue"
+    return None
 
 
 async def stdin_loop(runtime: "Runtime") -> None:
@@ -38,28 +84,28 @@ async def stdin_loop(runtime: "Runtime") -> None:
     )
     deps = RuntimeDeps(runtime=runtime)
     history: list[ModelMessage] = []
+    console = Console()
+    mossy_style = _mossy_output_style()
+    user_prompt_style = _user_prompt_style()
+    prompt = Text("> ", style=user_prompt_style)
 
-    print(
-        "Mossy CLI — chat mode. Use /quit to exit.\n",
-        flush=True,
-    )
+    console.print("Mossy CLI — chat mode. Use /quit to exit.\n", style=mossy_style)
 
     while True:
         try:
-            line = await asyncio.to_thread(sys.stdin.readline)
+            line = await asyncio.to_thread(console.input, prompt)
         except (KeyboardInterrupt, EOFError):
-            print("\nbye.", flush=True)
+            console.print("\nbye.", style=mossy_style)
             return
-        if not line:
-            await asyncio.sleep(0.05)
-            continue
         text = line.strip()
         if not text:
             continue
         if text.lower() in ("/quit", "/exit", "exit", "quit"):
-            print("bye.", flush=True)
+            console.print("bye.", style=mossy_style)
             return
 
-        out = await cli.run(text, deps=deps, message_history=history)
+        out = await run_agent_with_utc(cli, text, deps=deps, message_history=history)
         history += out.new_messages()
-        print(f"\n{out.output}\n", flush=True)
+        console.print()
+        console.print(str(out.output), style=mossy_style)
+        console.print()
