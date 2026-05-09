@@ -7,7 +7,7 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI and HTTP ship in the box. Add Slack, Telegram, or any connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
 ---
@@ -23,6 +23,7 @@ A handful of small pieces, each doing one thing.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
   - `http/app.py` — FastAPI endpoints (`/run`, `/status/{id}`, `/queue`, `/health`).
+  - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
 That's the whole platform. Everything else is a skill.
@@ -67,8 +68,11 @@ Useful flags:
 ```bash
 python main.py --no-http        # just the CLI + runtime
 python main.py --no-cli         # headless: HTTP only
+python main.py --no-slack       # disable the Slack channel
 python main.py --port 9000      # change HTTP port
 ```
+
+Slack starts automatically when both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are set in `.env`. Setup steps (creating the Slack app, scopes, tokens) live in `mossy/channels/slack/README.md`.
 
 Submit work over HTTP:
 
