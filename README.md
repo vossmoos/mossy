@@ -145,16 +145,18 @@ Restart (or rely on auto-reload) and the worker will discover the skill on the n
 
 ## Managing skills from CLI chat
 
-The **`skill-manager`** skill installs and removes skills without hand-copying folders. It treats the workspace **`repository/`** directory (gitignored by default) as a staging area: each skill there is a folder with `SKILL.md`, same shape as under `mossy/skills/`. Installed skills still live only under `mossy/skills/`; uninstalling removes that copy and leaves `repository/` untouched.
+Ask in chat — no separate CLI to learn. Mossy uses **`skill-manager`**, which runs `mossy/skills/skill-manager/scripts/manage_skills.py`:
 
-**From CLI chat** (`python main.py`), ask in plain language and Mossy will load `skill-manager` and run the helper script for you. Examples:
+| Command | Purpose |
+| --- | --- |
+| `list` | Installed skills vs `repository/` only |
+| `info <name>` | One skill's title and description |
+| `install <name>` | Copy into `mossy/skills/` |
+| `uninstall <name>` | Remove installed copy |
 
-- *“List which skills are installed and which are only in the repository.”*
-- *“Show details for the skill in folder `my-tool`.”*
-- *“Install `my-tool` from the repository.”* (uses `install`; add *“replace the installed copy”* if it already exists — that maps to `--force`.)
-- *“Uninstall `my-tool` from Mossy but keep it in the repository.”*
+Examples:
 
-The agent runs `mossy/skills/skill-manager/scripts/manage_skills.py` (`list`, `info`, `install`, `uninstall`) and summarizes the JSON. Run the same commands yourself from the repo root if you prefer the terminal directly.
+> List what's installed and what's only in the repository folder.  
+> Install `my-skill` from the repo.
 
-To change where “not installed” skills are read from, edit `repository-root` in `mossy/skills/skill-manager/SKILL.md`, or set **`MOSSY_SKILL_REPOSITORY`** to an absolute path. See that skill’s `SKILL.md` for full behavior.
-
+See `mossy/skills/skill-manager/SKILL.md` for configuration.
