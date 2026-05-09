@@ -1,28 +1,14 @@
 # Mossy
 
-> A lightweight engine for turning Markdown skills into agent behavior.
+> Ship agents by writing skills, not framework code.
 
-Mossy is for developers who want to spend their time shaping **skills**, not rebuilding the agent around them. It is not a broad agent framework; it is a skill engine with an agent loop around it: a worker, a queue, and a folder of Markdown skills that the agent discovers, loads, and follows on demand.
+Mossy is a ready-to-run agent with a tiny core and a powerful skill engine inside. You don't learn a Mossy API — you write **skills** in the open agentic `SKILL.md` format and the agent picks them up. Install it, run it, and extend it by dropping a Markdown file.
 
-- **Lightweight.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai).
-- **Skill-oriented.** Every capability is a `SKILL.md` the agent reads at runtime. Drop a folder, get a new skill.
-- **Multichannel.** The same runtime serves a CLI chat, an HTTP API, and anything else you wire to its inbox.
-- **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks with dependencies.
-
----
-
-## What Mossy is for
-
-Mossy is for builders who already have a simple agent loop, but want the main customization surface to be **skills**. Instead of editing agent code for every new behavior, you add or change a `SKILL.md`.
-
-You get one `Runtime` that:
-
-1. Accepts work from any channel (CLI, HTTP, your own).
-2. Picks tasks off a priority queue.
-3. Hands them to a worker agent that loads only the skills it needs.
-4. Lets that agent enqueue follow-up work, spawn teammates, or hand off to another channel.
-
-If you've ever wanted "a small agent that can answer in chat, run background tasks, and grow new abilities by dropping a Markdown file" — that's Mossy.
+- **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
+- **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
+- **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
+- **Extensible channels.** CLI and HTTP ship in the box. Add Slack, Telegram, or any connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
 ---
 
@@ -32,7 +18,7 @@ A handful of small pieces, each doing one thing.
 
 - **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, and the task lifecycle.
 - **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, and a structured `result`.
-- **Skills** (`mossy/skills/<name>/SKILL.md`) — Markdown files with YAML frontmatter. The worker discovers them, picks the relevant one, loads its instructions, and acts. Add one by creating a folder.
+- **Skills** (`mossy/skills/<name>/`) — a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers the folder, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to. Add one by creating a folder.
 - **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents: `runtime-control` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
@@ -125,7 +111,16 @@ The CLI chat is the fastest way to try Mossy. For background work, the **worker*
 
 ## Add your own skill
 
-Create a folder under `mossy/skills/` with a `SKILL.md`:
+A skill is a folder under `mossy/skills/` containing a `SKILL.md` and, optionally, any helper scripts or assets it needs:
+
+```text
+mossy/skills/weather/
+├── SKILL.md
+└── scripts/
+    └── fetch_forecast.py
+```
+
+`SKILL.md` describes when to use the skill and how to use the scripts:
 
 ```markdown
 ---
@@ -140,13 +135,11 @@ Use whenever the user asks about current or forecast weather.
 
 ## Instructions
 1. Ask for a city if none is given.
-2. Return a one-sentence summary.
+2. Run `scripts/fetch_forecast.py` with the city to get the forecast.
+3. Return a one-sentence summary based on the script output.
 ```
 
-Restart (or rely on auto-reload) and the worker will discover it on the next task. That's the whole extension model.
+See `mossy/skills/filesystem/` for a working example that bundles `SKILL.md` with a `scripts/` folder.
 
----
+Restart (or rely on auto-reload) and the worker will discover the skill on the next task. That's the whole extension model.
 
-## License
-
-MIT (or your choice — update this section to match your repo).
