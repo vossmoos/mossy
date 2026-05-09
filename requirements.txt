@@ -5,3 +5,4 @@ uvicorn[standard]>=0.32
 pydantic>=2
 python-dotenv>=1.0
 rich>=13.9
+slack-bolt

@@ -1,10 +1,11 @@
-"""Concurrent runtime plus optional HTTP and CLI channels."""
+"""Concurrent runtime plus optional HTTP, CLI, and Slack channels."""
 
 from __future__ import annotations
 
 import argparse
 import asyncio
 import os
+import sys
 
 import uvicorn
 
@@ -30,6 +31,7 @@ async def main() -> None:
     p.add_argument("--port", type=int, default=int(os.getenv("PORT", "8765")))
     p.add_argument("--no-http", action="store_true")
     p.add_argument("--no-cli", action="store_true")
+    p.add_argument("--no-slack", action="store_true")
     args = p.parse_args()
 
     runtime = Runtime()
@@ -39,6 +41,19 @@ async def main() -> None:
         tasks.append(_http(runtime, args.host, args.port))
     if not args.no_cli:
         tasks.append(stdin_loop(runtime))
+    if not args.no_slack:
+        bot_token = os.getenv("SLACK_BOT_TOKEN", "").strip()
+        app_token = os.getenv("SLACK_APP_TOKEN", "").strip()
+        if bot_token and app_token:
+            from mossy.channels.slack.app import SlackChannel
+
+            print("Slack channel enabled (Socket Mode).", file=sys.stderr)
+            tasks.append(SlackChannel(runtime, bot_token=bot_token, app_token=app_token).start())
+        elif bot_token or app_token:
+            print(
+                "Slack channel disabled: set both SLACK_BOT_TOKEN and SLACK_APP_TOKEN.",
+                file=sys.stderr,
+            )
     await asyncio.gather(*tasks)
 
 
