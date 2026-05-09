@@ -179,9 +179,35 @@ def cmd_uninstall(name: str) -> None:
     print(json.dumps({"status": "uninstalled", "removed": str(dest)}, indent=2))
 
 
+def _die_usage(message: str) -> None:
+    print(json.dumps({"error": message}, indent=2), file=sys.stderr)
+    sys.exit(2)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Manage Mossy skills from the repository folder.")
-    sub = parser.add_subparsers(dest="command", required=False)
+    parser.add_argument(
+        "--command",
+        dest="flag_command",
+        choices=("list", "info", "install", "uninstall"),
+        default=None,
+        metavar="CMD",
+        help="Alternative to a positional subcommand (pair with --folder-name when needed).",
+    )
+    parser.add_argument(
+        "--folder-name",
+        dest="folder_name",
+        default=None,
+        metavar="NAME",
+        help="Skill folder name; required for info, install, uninstall when using --command.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="With install: replace an existing installed folder.",
+    )
+
+    sub = parser.add_subparsers(dest="positional_command", required=False)
 
     sub.add_parser("list", help="List installed, repository, and not-yet-installed skill names.")
 
@@ -190,21 +216,40 @@ def main() -> None:
 
     p_in = sub.add_parser("install", help="Copy a skill from the repository into mossy/skills/.")
     p_in.add_argument("name", help="Skill folder name under the repository.")
-    p_in.add_argument("--force", action="store_true", help="Replace an existing installed folder.")
+    p_in.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace an existing installed folder (same as top-level --force).",
+    )
 
     p_un = sub.add_parser("uninstall", help="Remove an installed skill folder (repository copy is kept).")
     p_un.add_argument("name", help="Skill folder name under mossy/skills/.")
 
     args = parser.parse_args()
-    command = args.command or "list"
+
+    if args.flag_command and args.positional_command:
+        _die_usage("Use either --command or a positional subcommand (e.g. install NAME), not both.")
+
+    command = args.flag_command or args.positional_command or "list"
+    name = args.folder_name or getattr(args, "name", None)
+
+    if command in ("info", "install", "uninstall") and not name:
+        _die_usage(
+            f"Command {command!r} requires a skill folder name "
+            "(positional argument or --folder-name)."
+        )
+
     if command == "list":
         cmd_list()
     elif command == "info":
-        cmd_info(args.name)
+        assert name is not None
+        cmd_info(name)
     elif command == "install":
-        cmd_install(args.name, force=args.force)
+        assert name is not None
+        cmd_install(name, force=args.force)
     elif command == "uninstall":
-        cmd_uninstall(args.name)
+        assert name is not None
+        cmd_uninstall(name)
 
 
 if __name__ == "__main__":

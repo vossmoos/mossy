@@ -34,6 +34,16 @@ python mossy/skills/skill-manager/scripts/manage_skills.py install <folder-name>
 python mossy/skills/skill-manager/scripts/manage_skills.py uninstall <folder-name>
 ```
 
+Some runners only support **flag-style** argv (no nested subcommands). Those forms are equivalent:
+
+```bash
+python mossy/skills/skill-manager/scripts/manage_skills.py --command list
+python mossy/skills/skill-manager/scripts/manage_skills.py --command info --folder-name <folder-name>
+python mossy/skills/skill-manager/scripts/manage_skills.py --command install --folder-name <folder-name>
+python mossy/skills/skill-manager/scripts/manage_skills.py --command install --folder-name <folder-name> --force
+python mossy/skills/skill-manager/scripts/manage_skills.py --command uninstall --folder-name <folder-name>
+```
+
 Calling the script with **no arguments** is equivalent to `list` — useful when the runner cannot pass extra argv tokens after the script path.
 
 Script output is JSON on stdout; errors print JSON on stderr and exit non-zero.
