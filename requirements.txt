@@ -1,0 +1,6 @@
+pydantic-ai>=1.90,<2
+pydantic-ai-skills>=0.10
+fastapi>=0.115
+uvicorn[standard]>=0.32
+pydantic>=2
+python-dotenv>=1.0
