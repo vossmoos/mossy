@@ -7,7 +7,7 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI, HTTP, and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
 ---
@@ -23,6 +23,7 @@ A handful of small pieces, each doing one thing.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
   - `http/app.py` — FastAPI endpoints (`/run`, `/status/{id}`, `/queue`, `/health`).
+  - `agui/app.py` — AG-UI protocol over SSE for web chat clients (`POST /agui`). See `mossy/channels/agui/README.md`.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
@@ -69,6 +70,7 @@ Useful flags:
 python main.py --no-http        # just the CLI + runtime
 python main.py --no-cli         # headless: HTTP only
 python main.py --no-slack       # disable the Slack channel
+python main.py --no-agui        # disable the AG-UI web chat endpoint
 python main.py --port 9000      # change HTTP port
 ```
 
