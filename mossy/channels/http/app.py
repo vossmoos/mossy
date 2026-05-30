@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -20,8 +21,14 @@ class RunBody(BaseModel):
     scheduled_for: datetime | None = None
 
 
-def create_app(runtime: "Runtime") -> FastAPI:
+def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
     app = FastAPI(title="mossy")
+
+    if enable_agui:
+        from mossy.channels.agui.app import register_agui_routes
+
+        channel = register_agui_routes(app, runtime)
+        print(f"AG-UI channel enabled at POST {channel.path}", file=sys.stderr, flush=True)
 
     @app.post("/run")
     async def run_task(body: RunBody) -> dict[str, str | None]:
