@@ -582,7 +582,16 @@ _HTML = """<!DOCTYPE html>
   }
 
   function formatBotText(value) {
-    return escapeHtml(value).replaceAll('\\n', '<br>');
+    let html = escapeHtml(value).replaceAll('\\n', '<br>');
+    // Turn protected /files/<path> references into authenticated download links.
+    // The /files endpoint needs the bearer key, so a plain href would 401 — route
+    // through data-download-path, which the click handler fetches with the key.
+    html = html.replace(/`?(\/files\/[A-Za-z0-9._~%\/-]+)`?/g, (_m, url) => {
+      const rel = url.replace(/^\/files\//, '');
+      const name = rel.split('/').pop() || rel;
+      return `<a href="#" data-download-path="${rel}">⬇ ${name}</a>`;
+    });
+    return html;
   }
 
   function appendMeta(row, timeStr) {
