@@ -18,7 +18,7 @@ A handful of small pieces, each doing one thing.
 
 - **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, and the task lifecycle.
 - **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, and a structured `result`.
-- **Skills** (`mossy/skills/<name>/`) — a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers the folder, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to. Add one by creating a folder.
+- **Skills** — packaged system skills live in `mossy/skills/<name>/`; downloadable or user-provided skills live in `skills/<name>/`. Each skill is a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers both roots, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to.
 - **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
@@ -104,8 +104,8 @@ Now ask a simple question:
 
 ```text
 > what skills can you use?
-I can load skills from mossy/skills, such as echo, planner, system-queue,
-filesystem, and skill-manager. Ask me a question or tell me what task to run.
+I can load system skills from mossy/skills, plus any extended skills from skills/.
+System skills include echo, planner, system-queue, and filesystem.
 
 > /quit
 bye.
@@ -117,10 +117,10 @@ The CLI chat is the fastest way to try Mossy. For background work, the **worker*
 
 ## Add your own skill
 
-A skill is a folder under `mossy/skills/` containing a `SKILL.md` and, optionally, any helper scripts or assets it needs:
+A downloadable or user-provided skill is a folder under the repo-root `skills/` directory containing a `SKILL.md` and, optionally, any helper scripts or assets it needs:
 
 ```text
-mossy/skills/weather/
+skills/weather/
 ├── SKILL.md
 └── scripts/
     └── fetch_forecast.py
@@ -145,15 +145,6 @@ Use whenever the user asks about current or forecast weather.
 3. Return a one-sentence summary based on the script output.
 ```
 
-See `mossy/skills/filesystem/` for a working example that bundles `SKILL.md` with a `scripts/` folder.
+See the built-in `mossy/skills/filesystem/` system skill for a working example that bundles `SKILL.md` with a `scripts/` folder.
 
 Restart (or rely on auto-reload) and the worker will discover the skill on the next task. That's the whole extension model.
-
-## Managing skills from CLI chat
-
-Mossy has a **`skill-manager`** skill, so you can manage skills by talking to it. Ask naturally to install, remove, list, or explain skills.
-
-> List what's installed and what's available to install.  
-> What does the `weather` skill do?  
-> Install the `calendar` skill.  
-> Let's remove the `old-notes` skill.
