@@ -66,6 +66,16 @@ class TTLStore(Generic[V]):
             self._data[key] = (time.monotonic(), value)
             return value
 
+    async def get(self, key: str) -> V | None:
+        async with self._lock:
+            self._sweep()
+            entry = self._data.get(key)
+            if entry is None:
+                return None
+            value = entry[1]
+            self._data[key] = (time.monotonic(), value)
+            return value
+
     async def touch(self, key: str) -> None:
         async with self._lock:
             entry = self._data.get(key)

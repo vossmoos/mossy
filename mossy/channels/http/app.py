@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import os
 import sys
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
+from pydantic_ai import Agent
+from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
+from mossy.channels.slack.app import ConversationState, TTLStore
 from mossy.capabilities.archives import (
     archive_relative_path,
     archive_root,
@@ -21,10 +25,37 @@ from mossy.capabilities.archives import (
     resolve_archive_path,
     resolve_relative_archive_file_path,
 )
+from mossy.runtime.agent_run import run_agent_with_utc
+from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, TaskStatus
 
 if TYPE_CHECKING:
     from mossy.runtime import Runtime
+
+
+_CHAT_INSTRUCTIONS = """You are Mossy's browser chat assistant.
+
+You have access to agentic skills through the skills tools. Use skills immediately when they help
+answer the user or perform an action. Use the system-queue skill when work should be queued,
+inspected, cancelled, scheduled, or allowed to continue independently. Do not enqueue by default:
+answer directly when the request can be resolved in the chat turn.
+
+Queued tasks do not automatically post their final result back to the web client yet. When you enqueue
+work, include the task id in your reply and tell the user how to check on it.
+
+Each user message is prefixed with `[System UTC now: …]` — use it as the authoritative clock for
+relative scheduling ("in 1 minute", "tomorrow"): compute scheduled_for in UTC from that line, not from
+memory.
+
+Keep replies concise and readable in a chat UI."""
+
+
+def _chat_model() -> str:
+    return (
+        os.getenv("PLATFORMER_CHAT_MODEL")
+        or os.getenv("PLATFORMER_CLI_MODEL")
+        or os.getenv("PLATFORMER_SKILL_MODEL", "openai:gpt-5.4-mini")
+    )
 
 
 def _normalize_path(path: str) -> str:
@@ -77,6 +108,30 @@ class RunBody(BaseModel):
     scheduled_for: datetime | None = None
 
 
+class ChatBody(BaseModel):
+    message: str
+    thread_id: str | None = None
+    context: dict | None = None
+
+
+def _trim_message_history(history: list[ModelMessage], max_messages: int) -> list[ModelMessage]:
+    if max_messages <= 0:
+        return []
+    return history[-max_messages:]
+
+
+def _last_assistant_reply(history: list[ModelMessage]) -> str | None:
+    """Return the latest assistant text from pydantic-ai message history."""
+    for msg in reversed(history):
+        if not isinstance(msg, ModelResponse):
+            continue
+        text = "".join(part.content for part in msg.parts if isinstance(part, TextPart))
+        text = text.strip()
+        if text:
+            return text
+    return None
+
+
 def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
     app = FastAPI(title="mossy")
 
@@ -90,10 +145,47 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
         print("HTTP API key auth enabled (MOSSY_API_KEY). /health is public.", file=sys.stderr, flush=True)
     else:
         print(
-            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, and /archive/files.",
+            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /chat, /agui, /queue, and /archive/files.",
             file=sys.stderr,
             flush=True,
         )
+
+    _chat_agent = Agent(
+        _chat_model(),
+        deps_type=RuntimeDeps,
+        instructions=_CHAT_INSTRUCTIONS,
+        capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
+    )
+    _chat_deps = RuntimeDeps(runtime=runtime)
+    _chat_histories: TTLStore[ConversationState] = TTLStore(
+        ttl_seconds=float(os.getenv("CHAT_HISTORY_TTL_SECONDS", str(2 * 60 * 60))),
+        max_entries=int(os.getenv("CHAT_HISTORY_MAX_THREADS", "500")),
+    )
+    _chat_max_history = int(os.getenv("CHAT_HISTORY_MAX_MESSAGES", "40"))
+
+    @app.post("/chat")
+    async def chat(body: ChatBody) -> dict:
+        thread_id = body.thread_id or str(uuid.uuid4())
+        state = await _chat_histories.get_or_create(thread_id, ConversationState)
+        async with state.lock:
+            run = await run_agent_with_utc(
+                _chat_agent,
+                body.message,
+                deps=_chat_deps,
+                message_history=_trim_message_history(state.history, _chat_max_history),
+            )
+            state.history.extend(run.new_messages())
+            state.history[:] = _trim_message_history(state.history, _chat_max_history)
+        return {"reply": run.output, "thread_id": thread_id}
+
+    @app.get("/chat/last")
+    async def chat_last(thread_id: str = Query(...)) -> dict:
+        state = await _chat_histories.get(thread_id)
+        if state is None:
+            raise HTTPException(status_code=404, detail="unknown thread")
+        async with state.lock:
+            reply = _last_assistant_reply(state.history)
+        return {"reply": reply, "thread_id": thread_id}
 
     if enable_agui:
         from mossy.channels.agui.app import register_agui_routes
