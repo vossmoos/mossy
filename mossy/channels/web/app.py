@@ -426,8 +426,14 @@ _HTML = """<!DOCTYPE html>
       let reply = '';
       await readAguiStream(res, chunk => {
         if (!chunk) return;
+        if (!reply) thinkEl.classList.remove('thinking');
         reply += chunk;
         thinkEl.textContent = reply;
+        scrollBottom();
+      }, status => {
+        if (reply) return;  // answer is already streaming — don't overwrite it
+        thinkEl.classList.add('thinking');
+        thinkEl.textContent = status;
         scrollBottom();
       });
       if (!threadId) {
@@ -528,12 +534,13 @@ _HTML = """<!DOCTYPE html>
     }
   }
 
-  async function readAguiStream(res, onText) {
+  async function readAguiStream(res, onText, onStatus) {
     if (!res.body) throw new Error('Streaming is not supported by this browser.');
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    const ctx = { toolArgs: new Map() };  // toolCallId -> {name, args}
 
     while (true) {
       const { value, done } = await reader.read();
@@ -544,16 +551,16 @@ _HTML = """<!DOCTYPE html>
       while (boundary !== -1) {
         const frame = buffer.slice(0, boundary);
         buffer = buffer.slice(boundary + 2);
-        handleSseFrame(frame, onText);
+        handleSseFrame(frame, onText, onStatus, ctx);
         boundary = buffer.indexOf('\\n\\n');
       }
     }
 
     buffer += decoder.decode().replaceAll('\\r\\n', '\\n');
-    if (buffer.trim()) handleSseFrame(buffer, onText);
+    if (buffer.trim()) handleSseFrame(buffer, onText, onStatus, ctx);
   }
 
-  function handleSseFrame(frame, onText) {
+  function handleSseFrame(frame, onText, onStatus, ctx) {
     const data = frame
       .split('\\n')
       .filter(line => line.startsWith('data:'))
@@ -571,8 +578,54 @@ _HTML = """<!DOCTYPE html>
       throw new Error(event.message || event.error || 'AG-UI stream error');
     }
 
-    const chunk = event.delta ?? event.content ?? event.text ?? '';
-    if (event.type === 'TEXT_MESSAGE_CONTENT' && chunk) onText(chunk);
+    switch (event.type) {
+      case 'TEXT_MESSAGE_CONTENT': {
+        const chunk = event.delta ?? event.content ?? event.text ?? '';
+        if (chunk) onText(chunk);
+        break;
+      }
+      case 'TOOL_CALL_START': {
+        const rec = { name: event.toolCallName || 'tool', args: '' };
+        if (ctx) ctx.toolArgs.set(event.toolCallId, rec);
+        if (onStatus) onStatus(statusLabel(rec.name));
+        break;
+      }
+      case 'TOOL_CALL_ARGS': {
+        const rec = ctx && ctx.toolArgs.get(event.toolCallId);
+        if (rec && onStatus) {
+          rec.args += event.delta ?? '';
+          // Surface the concrete script for the generic skill-runner tool.
+          const m = rec.args.match(/"script_name"\\s*:\\s*"([^"]+)"/);
+          if (m) onStatus(statusLabel(rec.name, m[1]));
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  }
+
+  function statusLabel(tool, script) {
+    if (script) return `Running ${script}…`;
+    const map = {
+      run_skill_script: 'Running a skill script…',
+      load_skill: 'Loading skill instructions…',
+      list_skills: 'Looking up skills…',
+      read_skill_resource: 'Reading a reference…',
+      write_file: 'Writing a file…',
+      append_file: 'Writing a section…',
+      read_file: 'Reading a file…',
+      list_dir: 'Listing files…',
+      delete_file: 'Deleting a file…',
+      zip_files: 'Building the archive…',
+      unzip_file: 'Extracting an archive…',
+      list_zip: 'Inspecting an archive…',
+      share_file: 'Preparing the download…',
+      list_shared_files: 'Listing shared files…',
+      get_download_info: 'Preparing the download…',
+      unshare_file: 'Removing a shared file…',
+    };
+    return map[tool] || `Working… (${tool})`;
   }
 
   // ── Helpers ───────────────────────────────────────────────────────
