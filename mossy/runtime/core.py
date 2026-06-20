@@ -13,6 +13,8 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai_skills import SkillsCapability
 
+from mossy.capabilities.freshdesk import freshdesk_capability
+from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
@@ -24,9 +26,18 @@ from mossy.skills.selection import SkillSelection, skills_capability
 
 
 class Runtime:
-    def __init__(self, skills_root: Path | None = None) -> None:
-        root = Path(__file__).resolve().parents[1]
-        self.skills_root = skills_root or (root / "skills")
+    def __init__(
+        self,
+        skills_root: Path | None = None,
+        external_skills_root: Path | None = None,
+    ) -> None:
+        pkg_root = Path(__file__).resolve().parents[1]   # the `mossy` package
+        repo_root = Path(__file__).resolve().parents[2]  # repo root (one above the package)
+        # Internal skills ship inside the package; external/user skills live at the
+        # repo-root `skills/` folder and override internal ones by name (loaded last).
+        self.skills_root = skills_root or (pkg_root / "skills")
+        self.external_skills_root = external_skills_root or (repo_root / "skills")
+        self.skills_roots = [self.skills_root, self.external_skills_root]
         self.queue = TaskQueue()
         self.inbox: asyncio.Queue[Envelope] = asyncio.Queue()
         self.tasks: dict[str, Task] = {}
@@ -42,7 +53,7 @@ class Runtime:
         exclude_skills: Collection[str] | None = None,
     ) -> SkillsCapability:
         return skills_capability(
-            self.skills_root,
+            self.skills_roots,
             allow=allow_skills,
             exclude=exclude_skills,
             auto_reload=True,
@@ -67,6 +78,20 @@ class Runtime:
             exclude_skills=exclude_skills,
         ):
             capabilities.append(system_queue_capability(self))
+        if self._allows_skill_tools(
+            "freshdesk",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            fd = freshdesk_capability()
+            if fd is not None:
+                capabilities.append(fd)
+        if self._allows_skill_tools(
+            "github",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            capabilities.extend(github_capabilities())
         return capabilities
 
     def _allows_skill_tools(

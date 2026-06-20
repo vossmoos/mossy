@@ -43,18 +43,29 @@ class FilteredSkillsDirectory(SkillsDirectory):
 
 
 def skills_capability(
-    skills_root: str | Path,
+    skills_roots: str | Path | Collection[str | Path],
     *,
     allow: SkillSelection = "all",
     exclude: Collection[str] | None = None,
     auto_reload: bool = True,
 ) -> SkillsCapability:
-    """Build a SkillsCapability with optional name-level filtering."""
-    if allow == "all" and not exclude:
-        return SkillsCapability(directories=[skills_root], auto_reload=auto_reload)
+    """Build a SkillsCapability over one or more skill roots, with optional filtering.
 
-    directory = FilteredSkillsDirectory(path=skills_root, allow=allow, exclude=exclude)
-    return SkillsCapability(directories=[directory], auto_reload=auto_reload)
+    Accepts a single root or an ordered collection of roots. Later roots override
+    earlier ones on a per-skill-name basis (the underlying SkillsToolset is
+    last-directory-wins), so pass internal roots first and external/user roots last
+    to let external skills override the built-in ones by name.
+    """
+    if isinstance(skills_roots, (str, Path)):
+        roots: list[str | Path] = [skills_roots]
+    else:
+        roots = list(skills_roots)
+
+    directories = [
+        FilteredSkillsDirectory(path=root, allow=allow, exclude=exclude)
+        for root in roots
+    ]
+    return SkillsCapability(directories=directories, auto_reload=auto_reload)
 
 
 def _coerce_allow(allow: SkillSelection) -> set[str] | None:

@@ -1,0 +1,8 @@
+# External / user skills live here.
+#
+# Skills in this folder are discovered AFTER the built-in skills in
+# `mossy/skills/`, so a skill here with the same `name:` as an internal one
+# overrides it (last-directory-wins). Drop a `<name>/SKILL.md` folder in here
+# to add or override a skill without touching the package.
+#
+# This `.keep` file only exists so the otherwise-empty folder is tracked by git.
