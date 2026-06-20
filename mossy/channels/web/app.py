@@ -1,0 +1,487 @@
+"""Web UI channel for Mossy.
+
+Registers GET /ui — a self-contained HTML chat page that:
+  1. Asks the user for their Mossy API key.
+  2. On success, opens a GPT/Claude-style chat that POSTs to /chat.
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from fastapi import FastAPI
+from starlette.requests import Request
+from starlette.responses import HTMLResponse
+
+if TYPE_CHECKING:
+    pass  # no runtime import needed
+
+
+_HTML = """<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat</title>
+<style>
+  :root {
+    --bg:        #faf8f3;
+    --surface:   #fffef9;
+    --border:    #b8d4bc;
+    --accent:    #3d7a52;
+    --accent-hi: #4d9464;
+    --text:      #1a1a1a;
+    --muted:     #5c6b5e;
+    --user-bg:   #fffef9;
+    --bot-bg:    #fffef9;
+    --input-bg:  #fffef9;
+    --radius:    12px;
+    --font:      -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); }
+
+  /* ── Auth screen ── */
+  #auth-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: 24px;
+    padding: 24px;
+  }
+  #auth-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 32px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #auth-box label { font-size: 0.85rem; color: var(--muted); }
+  #key-input {
+    width: 100%;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 1rem;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  #key-input:focus { border-color: var(--accent); }
+  #auth-btn {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 11px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  #auth-btn:hover { background: var(--accent-hi); }
+  #auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  #auth-error { font-size: 0.82rem; color: #c0392b; min-height: 1.2em; }
+
+  /* ── Chat layout ── */
+  #chat-screen {
+    display: none;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  /* header */
+  #chat-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+  #chat-header .name { font-weight: 700; font-size: 1rem; color: var(--accent); }
+  #chat-header .thread-label {
+    font-size: 0.73rem;
+    color: var(--muted);
+    margin-left: auto;
+    font-family: monospace;
+  }
+  #new-chat-btn {
+    background: none;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 0.78rem;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  #new-chat-btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* messages */
+  #messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 0;
+    scroll-behavior: smooth;
+  }
+  .msg-row {
+    display: flex;
+    padding: 6px 24px;
+    gap: 12px;
+    max-width: 820px;
+    margin: 0 auto;
+    width: 100%;
+  }
+  .avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+  .avatar.user  { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .avatar.bot   { background: var(--accent); color: #fff; border: 1px solid var(--accent); }
+  .bubble {
+    font-size: 0.92rem;
+    line-height: 1.65;
+    color: var(--text);
+    word-break: break-word;
+    background: var(--bot-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+  .bubble.user-msg {
+    white-space: pre-wrap;
+    background: var(--user-bg);
+  }
+  .bubble.thinking { color: var(--muted); font-style: italic; background: transparent; border-color: transparent; padding: 0; }
+  .bubble.html p { margin: 0 0 0.55em; }
+  .bubble.html p:last-child { margin-bottom: 0; }
+  .bubble.html ul, .bubble.html ol { margin: 0.45em 0; padding-left: 1.35em; }
+  .bubble.html li { margin: 0.2em 0; }
+  .bubble.html strong { font-weight: 600; }
+  .bubble.html a { color: var(--accent); }
+  .msg-content { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .msg-meta { font-size: 0.72rem; color: var(--muted); }
+
+  /* input bar */
+  #input-bar {
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    padding: 16px 24px;
+    flex-shrink: 0;
+  }
+  #input-wrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    max-width: 820px;
+    margin: 0 auto;
+    background: var(--input-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 10px 14px;
+    transition: border-color 0.15s;
+  }
+  #input-wrap:focus-within { border-color: var(--accent); }
+  #msg-input {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: var(--text);
+    font-size: 0.94rem;
+    font-family: var(--font);
+    resize: none;
+    max-height: 180px;
+    overflow-y: auto;
+    line-height: 1.5;
+  }
+  #send-btn {
+    background: var(--accent);
+    border: none;
+    border-radius: 7px;
+    width: 34px;
+    height: 34px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  #send-btn:hover { background: var(--accent-hi); }
+  #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  #send-btn svg { width: 16px; height: 16px; fill: #fff; }
+</style>
+</head>
+<body>
+
+<!-- ── Auth screen ── -->
+<div id="auth-screen">
+  <div id="auth-box">
+    <label for="key-input">API Key</label>
+    <input id="key-input" type="password" placeholder="Enter API key" autocomplete="off" />
+    <button id="auth-btn">Connect</button>
+    <div id="auth-error"></div>
+  </div>
+</div>
+
+<!-- ── Chat screen ── -->
+<div id="chat-screen">
+  <div id="chat-header">
+    <span class="name">Chat</span>
+    <span class="thread-label" id="thread-label"></span>
+    <button id="new-chat-btn">+ New chat</button>
+  </div>
+  <div id="messages"></div>
+  <div id="input-bar">
+    <div id="input-wrap">
+      <textarea id="msg-input" rows="1" placeholder="Message…"></textarea>
+      <button id="send-btn" title="Send">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const $ = id => document.getElementById(id);
+  const authScreen  = $('auth-screen');
+  const chatScreen  = $('chat-screen');
+  const keyInput    = $('key-input');
+  const authBtn     = $('auth-btn');
+  const authError   = $('auth-error');
+  const messagesEl  = $('messages');
+  const msgInput    = $('msg-input');
+  const sendBtn     = $('send-btn');
+  const threadLabel = $('thread-label');
+  const newChatBtn  = $('new-chat-btn');
+
+  // Derive base URL from current page so this works on any deployment
+  const BASE = window.location.origin;
+
+  let apiKey   = sessionStorage.getItem('mossy_key') || '';
+  let threadId = null;
+  let busy     = false;
+
+  // ── Restore session ──────────────────────────────────────────────
+  if (apiKey) showChat();
+
+  // ── Auth ─────────────────────────────────────────────────────────
+  authBtn.addEventListener('click', doAuth);
+  keyInput.addEventListener('keydown', e => { if (e.key === 'Enter') doAuth(); });
+
+  async function doAuth() {
+    const k = keyInput.value.trim();
+    if (!k) return;
+    authBtn.disabled = true;
+    authError.textContent = '';
+    try {
+      // Use /health (public) to verify key by hitting /chat with a ping
+      const res = await fetch(`${BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${k}` },
+        body: JSON.stringify({ message: 'ping', thread_id: '__probe__' }),
+      });
+      if (res.status === 401) throw new Error('Invalid API key.');
+      if (!res.ok) throw new Error(`Server error (${res.status}).`);
+      apiKey = k;
+      sessionStorage.setItem('mossy_key', k);
+      showChat();
+    } catch (err) {
+      authError.textContent = err.message || 'Connection failed.';
+    } finally {
+      authBtn.disabled = false;
+    }
+  }
+
+  function showChat() {
+    authScreen.style.display  = 'none';
+    chatScreen.style.display  = 'flex';
+    msgInput.focus();
+  }
+
+  // ── New chat ──────────────────────────────────────────────────────
+  newChatBtn.addEventListener('click', () => {
+    threadId = null;
+    threadLabel.textContent = '';
+    messagesEl.innerHTML = '';
+    msgInput.focus();
+  });
+
+  // ── Textarea auto-grow ────────────────────────────────────────────
+  msgInput.addEventListener('input', () => {
+    msgInput.style.height = 'auto';
+    msgInput.style.height = msgInput.scrollHeight + 'px';
+  });
+
+  // ── Send on Enter (Shift+Enter = newline) ─────────────────────────
+  msgInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
+    }
+  });
+  sendBtn.addEventListener('click', send);
+
+  // ── Send message ─────────────────────────────────────────────────
+  async function send() {
+    const text = msgInput.value.trim();
+    if (!text || busy) return;
+
+    busy = true;
+    sendBtn.disabled = true;
+    msgInput.value = '';
+    msgInput.style.height = 'auto';
+
+    appendMsg('user', text);
+    const thinkEl = appendMsg('bot', 'Thinking.', true);
+    const stopThinking = startThinkingDots(thinkEl);
+    scrollBottom();
+
+    const t0 = Date.now();
+    try {
+      const res = await fetch(`${BASE}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({ message: text, thread_id: threadId }),
+      });
+
+      if (res.status === 401) {
+        sessionStorage.removeItem('mossy_key');
+        apiKey = '';
+        chatScreen.style.display = 'none';
+        authScreen.style.display = 'flex';
+        authError.textContent = 'Session expired — please reconnect.';
+        stopThinking();
+        thinkEl.remove();
+        return;
+      }
+
+      if (!res.ok) {
+        const detail = await res.text().catch(() => res.status);
+        stopThinking();
+        thinkEl.classList.remove('thinking');
+        thinkEl.textContent = `Error: ${detail}`;
+        return;
+      }
+
+      const data = await res.json();
+      if (data.thread_id && !threadId) {
+        threadId = data.thread_id;
+        threadLabel.textContent = `thread: ${threadId.slice(0, 8)}…`;
+      }
+      stopThinking();
+      thinkEl.classList.remove('thinking');
+      const secs = Math.round((Date.now() - t0) / 1000);
+      setBubbleHtml(thinkEl, data.reply || '(no reply)');
+      appendMeta(thinkEl.closest('.msg-row'), `${secs}s`);
+    } catch (err) {
+      stopThinking();
+      thinkEl.classList.remove('thinking');
+      thinkEl.textContent = `Network error: ${err.message}`;
+    } finally {
+      stopThinking();
+      busy = false;
+      sendBtn.disabled = false;
+      scrollBottom();
+      msgInput.focus();
+    }
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function appendMeta(row, timeStr) {
+    const content = row.querySelector('.msg-content');
+    const meta = document.createElement('div');
+    meta.className = 'msg-meta';
+    meta.textContent = `spent: ${timeStr}`;
+    content.appendChild(meta);
+  }
+
+  function setBubbleHtml(bubble, html) {
+    bubble.classList.add('html');
+    bubble.innerHTML = html;
+  }
+
+  function startThinkingDots(el) {
+    let dots = 1;
+    let stopped = false;
+    const render = () => {
+      el.textContent = `Thinking${'.'.repeat(dots)}`;
+      dots = dots === 3 ? 1 : dots + 1;
+    };
+    render();
+    const intervalId = window.setInterval(render, 450);
+    return () => {
+      if (stopped) return;
+      stopped = true;
+      window.clearInterval(intervalId);
+    };
+  }
+
+  function appendMsg(role, text, isThinking = false) {
+    const row = document.createElement('div');
+    row.className = 'msg-row';
+
+    const av = document.createElement('div');
+    av.className = `avatar ${role === 'user' ? 'user' : 'bot'}`;
+    av.textContent = role === 'user' ? 'You' : 'M';
+
+    const content = document.createElement('div');
+    content.className = 'msg-content';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble' + (isThinking ? ' thinking' : '');
+    if (role === 'user') {
+      bubble.classList.add('user-msg');
+      bubble.textContent = text;
+    } else if (isThinking) {
+      bubble.textContent = text;
+    } else {
+      setBubbleHtml(bubble, text);
+    }
+
+    content.appendChild(bubble);
+    row.appendChild(av);
+    row.appendChild(content);
+    messagesEl.appendChild(row);
+    return bubble;
+  }
+
+  function scrollBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+})();
+</script>
+</body>
+</html>
+"""
+
+
+def register_web_routes(app: FastAPI) -> None:
+    """Mount the browser chat UI at GET /ui."""
+
+    @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/ui/", response_class=HTMLResponse, include_in_schema=False)
+    async def web_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
+        return HTMLResponse(_HTML)
