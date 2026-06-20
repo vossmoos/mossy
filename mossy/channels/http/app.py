@@ -13,13 +13,12 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import FileResponse, JSONResponse, Response
 
-from mossy.capabilities.archives import (
-    archive_relative_path,
-    archive_root,
-    ensure_zip_file_path,
-    list_archive_files,
-    resolve_archive_path,
-    resolve_relative_archive_file_path,
+from mossy.capabilities.file_sharing import (
+    list_shared,
+    resolve_relative_shared_file_path,
+    resolve_shared_path,
+    share_relative_path,
+    share_root,
 )
 from mossy.runtime.models import Envelope, TaskStatus
 
@@ -90,7 +89,7 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
         print("HTTP API key auth enabled (MOSSY_API_KEY). /health is public.", file=sys.stderr, flush=True)
     else:
         print(
-            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, and /archive/files.",
+            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, and /files.",
             file=sys.stderr,
             flush=True,
         )
@@ -148,18 +147,18 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
         ]
         return {"tasks": pending}
 
-    archive_files_root = archive_root(runtime.repo_root)
+    shared_files_root = share_root(runtime.repo_root)
 
-    @app.get("/archive/files")
-    async def archive_file_list(
+    @app.get("/files")
+    async def shared_file_list(
         path: str = "",
         recursive: bool = False,
         limit: int = 200,
     ) -> dict:
         try:
-            return list_archive_files(
+            return list_shared(
                 path,
-                root=archive_files_root,
+                root=shared_files_root,
                 recursive=recursive,
                 limit=limit,
             )
@@ -168,33 +167,31 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    @app.get("/archive/files/{file_path:path}")
-    async def archive_file_download(file_path: str) -> FileResponse:
+    @app.get("/files/{file_path:path}")
+    async def shared_file_download(file_path: str) -> FileResponse:
         try:
-            target = resolve_archive_path(file_path, root=archive_files_root)
-            ensure_zip_file_path(target)
+            target = resolve_shared_path(file_path, root=shared_files_root)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         if not target.exists() or not target.is_file():
             raise HTTPException(status_code=404, detail="file not found")
         return FileResponse(target, filename=target.name)
 
-    @app.delete("/archive/files/{file_path:path}")
-    async def archive_file_delete(file_path: str) -> dict:
+    @app.delete("/files/{file_path:path}")
+    async def shared_file_delete(file_path: str) -> dict:
         try:
-            target = resolve_relative_archive_file_path(
+            target = resolve_relative_shared_file_path(
                 file_path,
-                root=archive_files_root,
+                root=shared_files_root,
                 must_exist=True,
             )
-            ensure_zip_file_path(target)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         stat = target.stat()
-        relative_path = archive_relative_path(target, root=archive_files_root)
+        relative_path = share_relative_path(target, root=shared_files_root)
         target.unlink()
         return {
             "ok": True,

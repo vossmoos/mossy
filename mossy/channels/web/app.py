@@ -458,7 +458,7 @@ _HTML = """<!DOCTYPE html>
     if (!apiKey) return;
     const bubble = appendMsg('bot', 'Loading files.', true);
     try {
-      const res = await fetch(`${BASE}/archive/files`, {
+      const res = await fetch(`${BASE}/files`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       });
       if (res.status === 401) {
@@ -477,7 +477,7 @@ _HTML = """<!DOCTYPE html>
       }
       const data = await res.json();
       bubble.classList.remove('thinking');
-      setBubbleHtml(bubble, renderArchiveFiles(data));
+      setBubbleHtml(bubble, renderSharedFiles(data));
     } catch (err) {
       bubble.classList.remove('thinking');
       bubble.textContent = `Could not load files: ${err.message}`;
@@ -486,9 +486,9 @@ _HTML = """<!DOCTYPE html>
     }
   }
 
-  function renderArchiveFiles(data) {
+  function renderSharedFiles(data) {
     const entries = data.entries || [];
-    if (!entries.length) return '<p>No files in the archive root yet.</p>';
+    if (!entries.length) return '<p>No shared files yet.</p>';
     const items = entries.map(entry => {
       const label = `${entry.is_dir ? 'folder' : 'file'} ${escapeHtml(entry.path)}`;
       if (entry.is_dir) return `<li>${label}</li>`;
@@ -496,12 +496,12 @@ _HTML = """<!DOCTYPE html>
       return `<li><a href="#" data-download-path="${escapeHtml(entry.path)}">${label}${size}</a></li>`;
     }).join('');
     const more = data.truncated ? '<p>List truncated. Ask Mossy for a narrower folder.</p>' : '';
-    return `<p>Archive files:</p><ul>${items}</ul>${more}`;
+    return `<p>Shared files:</p><ul>${items}</ul>${more}`;
   }
 
   async function downloadArchiveFile(path) {
     try {
-      const res = await fetch(`${BASE}/archive/files/${encodeURIComponent(path).replaceAll('%2F', '/')}`, {
+      const res = await fetch(`${BASE}/files/${encodeURIComponent(path).replaceAll('%2F', '/')}`, {
         headers: { 'Authorization': `Bearer ${apiKey}` },
       });
       if (res.status === 401) {

@@ -13,7 +13,8 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai_skills import SkillsCapability
 
-from mossy.capabilities.archives import archives_capability
+from mossy.capabilities.file_sharing import file_sharing_capability
+from mossy.capabilities.filesystem import filesystem_capability
 from mossy.capabilities.freshdesk import freshdesk_capability
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
@@ -75,6 +76,12 @@ class Runtime:
             ),
         ]
         if self._allows_skill_tools(
+            "filesystem",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            capabilities.append(filesystem_capability(self.repo_root))
+        if self._allows_skill_tools(
             "system-queue",
             allow_skills=allow_skills,
             exclude_skills=exclude_skills,
@@ -95,11 +102,11 @@ class Runtime:
         ):
             capabilities.extend(github_capabilities())
         if self._allows_skill_tools(
-            "archives",
+            "file-sharing",
             allow_skills=allow_skills,
             exclude_skills=exclude_skills,
         ):
-            capabilities.append(archives_capability(self.repo_root))
+            capabilities.append(file_sharing_capability(self.repo_root))
         return capabilities
 
     def _allows_skill_tools(
