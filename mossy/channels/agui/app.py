@@ -106,7 +106,7 @@ class AguiChannel:
             _agui_model(),
             deps_type=RuntimeDeps,
             instructions=_AGUI_INSTRUCTIONS,
-            capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
+            capabilities=runtime.shared_capabilities(),
         )
         self.deps = RuntimeDeps(runtime=runtime)
 
