@@ -19,14 +19,31 @@ already-existing files out for download.
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any
 from urllib.parse import quote
 
+from pydantic_ai import ModelRetry
 from pydantic_ai.capabilities.toolset import Toolset
 from pydantic_ai.toolsets import FunctionToolset
+
+
+def _recoverable(fn):
+    """Return recoverable tool errors to the model as a ModelRetry rather than
+    letting a raised exception abort the run as a fatal RUN_ERROR."""
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await fn(*args, **kwargs)
+        except ModelRetry:
+            raise
+        except Exception as exc:  # noqa: BLE001 - surface as a recoverable tool error
+            # Name the tool so the retry tells the model exactly what failed and why.
+            raise ModelRetry(f"{fn.__name__} failed: {exc}") from exc
+    return wrapper
 
 SHARE_ROOT_ENV = "MOSSY_SHARE_ROOT"
 SHARE_MAX_STORAGE_ENV = "MOSSY_SHARE_MAX_STORAGE"
@@ -116,7 +133,12 @@ def file_sharing_capability(repo_root: str | Path | None = None) -> Toolset:
 
     return Toolset(
         FunctionToolset(
-            [share_file, list_shared_files, get_download_info, unshare_file],
+            [
+                _recoverable(share_file),
+                _recoverable(list_shared_files),
+                _recoverable(get_download_info),
+                _recoverable(unshare_file),
+            ],
             id="file-sharing",
             instructions=(
                 "Make finished files downloadable. share_file copies a file from the "

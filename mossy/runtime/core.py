@@ -128,6 +128,7 @@ class Runtime:
             self._worker = Agent(
                 self._worker_model,
                 deps_type=RuntimeDeps,
+                retries=3,  # recover from a failed tool call instead of failing the task
                 instructions=(
                     "You are Mossy's queued task worker. Each run begins with a line "
                     "'[System UTC now: …]' — treat it as the authoritative current time in UTC. "

@@ -107,6 +107,9 @@ class AguiChannel:
             deps_type=RuntimeDeps,
             instructions=_AGUI_INSTRUCTIONS,
             capabilities=runtime.shared_capabilities(),
+            # Give the model room to recover from a failed tool call (ModelRetry feeds
+            # the error back) instead of the run dying on the first stumble.
+            retries=3,
         )
         self.deps = RuntimeDeps(runtime=runtime)
 

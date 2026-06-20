@@ -141,6 +141,7 @@ class SlackChannel:
             deps_type=RuntimeDeps,
             instructions=_SLACK_INSTRUCTIONS,
             capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
+            retries=3,  # recover from a failed tool call instead of breaking the run
         )
         self.deps = RuntimeDeps(runtime=runtime)
         # Same Slack message can yield both `app_mention` and `message`; dedupe replies.

@@ -94,6 +94,7 @@ async def stdin_loop(runtime: "Runtime") -> None:
         deps_type=RuntimeDeps,
         instructions=_CLI_INSTRUCTIONS,
         capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
+        retries=3,  # recover from a failed tool call instead of breaking the run
     )
     deps = RuntimeDeps(runtime=runtime)
     history: list[ModelMessage] = []

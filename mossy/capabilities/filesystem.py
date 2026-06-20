@@ -15,14 +15,34 @@ invent content — they only persist, read back, list, and archive what the mode
 
 from __future__ import annotations
 
+import functools
 import os
 import shutil
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from pydantic_ai import ModelRetry
 from pydantic_ai.capabilities.toolset import Toolset
 from pydantic_ai.toolsets import FunctionToolset
+
+
+def _recoverable(fn):
+    """Wrap a tool so recoverable errors return to the model as a retry instead of
+    aborting the run. A raised exception (e.g. 'file already exists') otherwise
+    surfaces as a fatal RUN_ERROR; ModelRetry hands the message back so the model
+    can correct the call (overwrite, append, pick another path)."""
+    @functools.wraps(fn)
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        try:
+            return await fn(*args, **kwargs)
+        except ModelRetry:
+            raise
+        except Exception as exc:  # noqa: BLE001 - surface as a recoverable tool error
+            # Name the tool so the retry tells the model exactly what failed and why,
+            # giving it the context to correct the call rather than repeat it.
+            raise ModelRetry(f"{fn.__name__} failed: {exc}") from exc
+    return wrapper
 
 FS_ROOT_ENV = "MOSSY_FS_ROOT"
 FS_MAX_WRITE_ENV = "MOSSY_FS_MAX_WRITE"
@@ -252,14 +272,14 @@ def filesystem_capability(base_dir: str | Path | None = None) -> Toolset:
     return Toolset(
         FunctionToolset(
             [
-                write_file,
-                append_file,
-                read_file,
-                list_dir,
-                delete_file,
-                zip_files,
-                unzip_file,
-                list_zip,
+                _recoverable(write_file),
+                _recoverable(append_file),
+                _recoverable(read_file),
+                _recoverable(list_dir),
+                _recoverable(delete_file),
+                _recoverable(zip_files),
+                _recoverable(unzip_file),
+                _recoverable(list_zip),
             ],
             id="filesystem",
             instructions=(
