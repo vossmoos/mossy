@@ -13,6 +13,7 @@ from typing import Any
 from pydantic_ai import Agent
 from pydantic_ai_skills import SkillsCapability
 
+from mossy.capabilities.archives import archives_capability
 from mossy.capabilities.freshdesk import freshdesk_capability
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
@@ -33,6 +34,7 @@ class Runtime:
     ) -> None:
         pkg_root = Path(__file__).resolve().parents[1]   # the `mossy` package
         repo_root = Path(__file__).resolve().parents[2]  # repo root (one above the package)
+        self.repo_root = repo_root
         # Internal skills ship inside the package; external/user skills live at the
         # repo-root `skills/` folder and override internal ones by name (loaded last).
         self.skills_root = skills_root or (pkg_root / "skills")
@@ -92,6 +94,12 @@ class Runtime:
             exclude_skills=exclude_skills,
         ):
             capabilities.extend(github_capabilities())
+        if self._allows_skill_tools(
+            "archives",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            capabilities.append(archives_capability(self.repo_root))
         return capabilities
 
     def _allows_skill_tools(
