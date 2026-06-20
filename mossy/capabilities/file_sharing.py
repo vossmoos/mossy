@@ -69,7 +69,7 @@ def file_sharing_capability(repo_root: str | Path | None = None) -> Toolset:
     ) -> dict[str, Any]:
         """Copy a finished file into the share root and return its download link.
 
-        `path` is a file under the repo (e.g. `data/archive/20260620T....zip`).
+        `path` is a file under the repo (e.g. `data/20260620T....zip`).
         `name` optionally renames the shared copy (a simple file name, no folders).
         Returns the shared path, byte size, and the protected `download_url` to give
         the user.

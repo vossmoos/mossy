@@ -14,7 +14,7 @@ files copied into the share folder are downloadable.
 ## Tools
 
 - `share_file(path, name="", overwrite=false)` — copy a file from under the repo
-  (e.g. `data/archive/20260620T...Z.zip`) into the isolated share root and return its
+  (e.g. `data/20260620T...Z.zip`) into the isolated share root and return its
   `download_url`. Optionally rename the shared copy with `name` (a simple file name).
 - `list_shared_files(recursive=false)` — list everything currently shared, each with
   its download link.
