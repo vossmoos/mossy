@@ -2,11 +2,12 @@
 
 Registers GET /ui — a self-contained HTML chat page that:
   1. Asks the user for their Mossy API key.
-  2. On success, opens a GPT/Claude-style chat that POSTs to /chat.
+  2. On success, opens a GPT/Claude-style chat that streams from AG-UI.
 """
 
 from __future__ import annotations
 
+import json
 from typing import TYPE_CHECKING
 
 from fastapi import FastAPI
@@ -283,9 +284,12 @@ _HTML = """<!DOCTYPE html>
 
   // Derive base URL from current page so this works on any deployment
   const BASE = window.location.origin;
+  const AGUI_PATH = __AGUI_PATH__;
 
   let apiKey   = sessionStorage.getItem('mossy_key') || '';
   let threadId = null;
+  let aguiMessages = [];
+  let messageSeq = 0;
   let busy     = false;
 
   // ── Restore session ──────────────────────────────────────────────
@@ -301,11 +305,9 @@ _HTML = """<!DOCTYPE html>
     authBtn.disabled = true;
     authError.textContent = '';
     try {
-      // Use /health (public) to verify key by hitting /chat with a ping
-      const res = await fetch(`${BASE}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${k}` },
-        body: JSON.stringify({ message: 'ping', thread_id: '__probe__' }),
+      // Probe a protected endpoint without spending a model turn.
+      const res = await fetch(`${BASE}/queue`, {
+        headers: { 'Authorization': `Bearer ${k}` },
       });
       if (res.status === 401) throw new Error('Invalid API key.');
       if (!res.ok) throw new Error(`Server error (${res.status}).`);
@@ -328,6 +330,8 @@ _HTML = """<!DOCTYPE html>
   // ── New chat ──────────────────────────────────────────────────────
   newChatBtn.addEventListener('click', () => {
     threadId = null;
+    aguiMessages = [];
+    messageSeq = 0;
     threadLabel.textContent = '';
     messagesEl.innerHTML = '';
     msgInput.focus();
@@ -371,11 +375,30 @@ _HTML = """<!DOCTYPE html>
     scrollBottom();
 
     const t0 = Date.now();
+    const currentThreadId = threadId || newId('thread');
+    const userMessage = {
+      id: newId('msg'),
+      role: 'user',
+      content: text,
+    };
+    const requestMessages = [...aguiMessages, userMessage];
     try {
-      const res = await fetch(`${BASE}/chat`, {
+      const res = await fetch(`${BASE}${AGUI_PATH}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
-        body: JSON.stringify({ message: text, thread_id: threadId }),
+        headers: {
+          'Accept': 'text/event-stream',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          threadId: currentThreadId,
+          runId: newId('run'),
+          messages: requestMessages,
+          state: {},
+          context: [],
+          tools: [],
+          forwardedProps: {},
+        }),
       });
 
       if (res.status === 401) {
@@ -397,20 +420,31 @@ _HTML = """<!DOCTYPE html>
         return;
       }
 
-      const data = await res.json();
-      if (data.thread_id && !threadId) {
-        threadId = data.thread_id;
-        threadLabel.textContent = `thread: ${threadId.slice(0, 8)}…`;
-      }
       stopThinking();
       thinkEl.classList.remove('thinking');
+      thinkEl.textContent = '';
+      let reply = '';
+      await readAguiStream(res, chunk => {
+        if (!chunk) return;
+        reply += chunk;
+        thinkEl.textContent = reply;
+        scrollBottom();
+      });
+      if (!threadId) {
+        threadId = currentThreadId;
+        threadLabel.textContent = `thread: ${threadId.slice(0, 8)}…`;
+      }
+      aguiMessages = [
+        ...requestMessages,
+        { id: newId('msg'), role: 'assistant', content: reply },
+      ];
       const secs = Math.round((Date.now() - t0) / 1000);
-      setBubbleHtml(thinkEl, data.reply || '(no reply)');
+      setBubbleHtml(thinkEl, formatBotText(reply || '(no reply)'));
       appendMeta(thinkEl.closest('.msg-row'), `${secs}s`);
     } catch (err) {
       stopThinking();
       thinkEl.classList.remove('thinking');
-      thinkEl.textContent = `Network error: ${err.message}`;
+      thinkEl.textContent = `Stream error: ${err.message}`;
     } finally {
       stopThinking();
       busy = false;
@@ -494,7 +528,63 @@ _HTML = """<!DOCTYPE html>
     }
   }
 
+  async function readAguiStream(res, onText) {
+    if (!res.body) throw new Error('Streaming is not supported by this browser.');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true }).replaceAll('\\r\\n', '\\n');
+
+      let boundary = buffer.indexOf('\\n\\n');
+      while (boundary !== -1) {
+        const frame = buffer.slice(0, boundary);
+        buffer = buffer.slice(boundary + 2);
+        handleSseFrame(frame, onText);
+        boundary = buffer.indexOf('\\n\\n');
+      }
+    }
+
+    buffer += decoder.decode().replaceAll('\\r\\n', '\\n');
+    if (buffer.trim()) handleSseFrame(buffer, onText);
+  }
+
+  function handleSseFrame(frame, onText) {
+    const data = frame
+      .split('\\n')
+      .filter(line => line.startsWith('data:'))
+      .map(line => line.slice(5).trimStart())
+      .join('\\n');
+    if (!data || data === '[DONE]') return;
+
+    let event;
+    try {
+      event = JSON.parse(data);
+    } catch (err) {
+      throw new Error(`Invalid AG-UI event: ${err.message}`);
+    }
+    if (event.type === 'RUN_ERROR' || event.type === 'ERROR') {
+      throw new Error(event.message || event.error || 'AG-UI stream error');
+    }
+
+    const chunk = event.delta ?? event.content ?? event.text ?? '';
+    if (event.type === 'TEXT_MESSAGE_CONTENT' && chunk) onText(chunk);
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────
+  function newId(prefix) {
+    const random = window.crypto?.randomUUID?.() || `${Date.now()}-${++messageSeq}`;
+    return `${prefix}-${random}`;
+  }
+
+  function formatBotText(value) {
+    return escapeHtml(value).replaceAll('\\n', '<br>');
+  }
+
   function appendMeta(row, timeStr) {
     const content = row.querySelector('.msg-content');
     const meta = document.createElement('div');
@@ -572,10 +662,11 @@ _HTML = """<!DOCTYPE html>
 """
 
 
-def register_web_routes(app: FastAPI) -> None:
+def register_web_routes(app: FastAPI, *, agui_path: str = "/agui") -> None:
     """Mount the browser chat UI at GET /ui."""
+    html = _HTML.replace("__AGUI_PATH__", json.dumps(agui_path))
 
     @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
     @app.get("/ui/", response_class=HTMLResponse, include_in_schema=False)
     async def web_ui(request: Request) -> HTMLResponse:  # noqa: ARG001
-        return HTMLResponse(_HTML)
+        return HTMLResponse(html)
