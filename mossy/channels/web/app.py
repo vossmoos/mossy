@@ -114,7 +114,8 @@ _HTML = """<!DOCTYPE html>
     margin-left: auto;
     font-family: monospace;
   }
-  #new-chat-btn {
+  #new-chat-btn,
+  #files-btn {
     background: none;
     border: 1px solid var(--border);
     border-radius: 6px;
@@ -125,7 +126,8 @@ _HTML = """<!DOCTYPE html>
     transition: border-color 0.15s, color 0.15s;
     white-space: nowrap;
   }
-  #new-chat-btn:hover { border-color: var(--accent); color: var(--accent); }
+  #new-chat-btn:hover,
+  #files-btn:hover { border-color: var(--accent); color: var(--accent); }
 
   /* messages */
   #messages {
@@ -248,6 +250,7 @@ _HTML = """<!DOCTYPE html>
   <div id="chat-header">
     <span class="name">Chat</span>
     <span class="thread-label" id="thread-label"></span>
+    <button id="files-btn">Files</button>
     <button id="new-chat-btn">+ New chat</button>
   </div>
   <div id="messages"></div>
@@ -276,6 +279,7 @@ _HTML = """<!DOCTYPE html>
   const sendBtn     = $('send-btn');
   const threadLabel = $('thread-label');
   const newChatBtn  = $('new-chat-btn');
+  const filesBtn    = $('files-btn');
 
   // Derive base URL from current page so this works on any deployment
   const BASE = window.location.origin;
@@ -327,6 +331,13 @@ _HTML = """<!DOCTYPE html>
     threadLabel.textContent = '';
     messagesEl.innerHTML = '';
     msgInput.focus();
+  });
+  filesBtn.addEventListener('click', showFiles);
+  messagesEl.addEventListener('click', e => {
+    const link = e.target.closest('[data-download-path]');
+    if (!link) return;
+    e.preventDefault();
+    downloadArchiveFile(link.dataset.downloadPath);
   });
 
   // ── Textarea auto-grow ────────────────────────────────────────────
@@ -409,6 +420,80 @@ _HTML = """<!DOCTYPE html>
     }
   }
 
+  async function showFiles() {
+    if (!apiKey) return;
+    const bubble = appendMsg('bot', 'Loading files.', true);
+    try {
+      const res = await fetch(`${BASE}/archive/files`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem('mossy_key');
+        apiKey = '';
+        chatScreen.style.display = 'none';
+        authScreen.style.display = 'flex';
+        authError.textContent = 'Session expired — please reconnect.';
+        bubble.remove();
+        return;
+      }
+      if (!res.ok) {
+        bubble.classList.remove('thinking');
+        bubble.textContent = `Could not load files (${res.status}).`;
+        return;
+      }
+      const data = await res.json();
+      bubble.classList.remove('thinking');
+      setBubbleHtml(bubble, renderArchiveFiles(data));
+    } catch (err) {
+      bubble.classList.remove('thinking');
+      bubble.textContent = `Could not load files: ${err.message}`;
+    } finally {
+      scrollBottom();
+    }
+  }
+
+  function renderArchiveFiles(data) {
+    const entries = data.entries || [];
+    if (!entries.length) return '<p>No files in the archive root yet.</p>';
+    const items = entries.map(entry => {
+      const label = `${entry.is_dir ? 'folder' : 'file'} ${escapeHtml(entry.path)}`;
+      if (entry.is_dir) return `<li>${label}</li>`;
+      const size = typeof entry.bytes === 'number' ? ` (${entry.bytes} bytes)` : '';
+      return `<li><a href="#" data-download-path="${escapeHtml(entry.path)}">${label}${size}</a></li>`;
+    }).join('');
+    const more = data.truncated ? '<p>List truncated. Ask Mossy for a narrower folder.</p>' : '';
+    return `<p>Archive files:</p><ul>${items}</ul>${more}`;
+  }
+
+  async function downloadArchiveFile(path) {
+    try {
+      const res = await fetch(`${BASE}/archive/files/${encodeURIComponent(path).replaceAll('%2F', '/')}`, {
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+      });
+      if (res.status === 401) {
+        sessionStorage.removeItem('mossy_key');
+        apiKey = '';
+        chatScreen.style.display = 'none';
+        authScreen.style.display = 'flex';
+        authError.textContent = 'Session expired — please reconnect.';
+        return;
+      }
+      if (!res.ok) throw new Error(`download failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = path.split('/').pop() || 'download';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      appendMsg('bot', `Could not download ${escapeHtml(path)}: ${escapeHtml(err.message)}`);
+      scrollBottom();
+    }
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────
   function appendMeta(row, timeStr) {
     const content = row.querySelector('.msg-content');
@@ -421,6 +506,15 @@ _HTML = """<!DOCTYPE html>
   function setBubbleHtml(bubble, html) {
     bubble.classList.add('html');
     bubble.innerHTML = html;
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
   }
 
   function startThinkingDots(el) {
