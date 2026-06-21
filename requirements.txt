@@ -8,6 +8,7 @@ pydantic>=2
 python-dotenv>=1.0
 rich>=13.9
 slack-bolt
+slack-sdk
 # simxp-ehr skill: YAML patient model + C-CDA structural/XSD validation
 pyyaml>=6.0
 lxml>=5.0
