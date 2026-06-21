@@ -16,6 +16,7 @@ from pydantic_ai_skills import SkillsCapability
 from mossy.capabilities.file_sharing import file_sharing_capability
 from mossy.capabilities.filesystem import filesystem_capability
 from mossy.capabilities.freshdesk import freshdesk_capability
+from mossy.capabilities.jira import jira_capability
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.system_queue import system_queue_capability
@@ -95,6 +96,14 @@ class Runtime:
             fd = freshdesk_capability()
             if fd is not None:
                 capabilities.append(fd)
+        if self._allows_skill_tools(
+            "jira",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            jira = jira_capability()
+            if jira is not None:
+                capabilities.append(jira)
         if self._allows_skill_tools(
             "github",
             allow_skills=allow_skills,

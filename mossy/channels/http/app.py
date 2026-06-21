@@ -34,14 +34,14 @@ def _configured_api_key() -> str:
     return (os.getenv("MOSSY_API_KEY") or os.getenv("HTTP_API_KEY", "")).strip()
 
 
-def _auth_exempt_paths() -> frozenset[str]:
+def _auth_exempt_paths(*, extra: frozenset[str] = frozenset()) -> frozenset[str]:
     """Paths that skip API key auth. /ui is public so the browser can load the
     chat page before the user enters their key."""
     return frozenset({
         _normalize_path("/health"),
         _normalize_path("/ui"),
         _normalize_path("/ui/"),
-    })
+    }) | extra
 
 
 def _request_api_key(request: Request) -> str:
@@ -79,14 +79,32 @@ class RunBody(BaseModel):
 def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
     app = FastAPI(title="mossy")
 
+    from mossy.channels.jira_webhook import (
+        configured_webhook_path,
+        configured_webhook_secret,
+        register_jira_webhook_routes,
+    )
+
+    jira_webhook_exempt = frozenset()
+    if configured_webhook_secret():
+        jira_path = _normalize_path(configured_webhook_path())
+        jira_webhook_exempt = frozenset({jira_path})
+
     api_key = _configured_api_key()
     if api_key:
         app.add_middleware(
             ApiKeyMiddleware,
             api_key=api_key,
-            exempt_paths=_auth_exempt_paths(),
+            exempt_paths=_auth_exempt_paths(extra=jira_webhook_exempt),
         )
-        print("HTTP API key auth enabled (MOSSY_API_KEY). /health is public.", file=sys.stderr, flush=True)
+        if jira_webhook_exempt:
+            print(
+                "HTTP API key auth enabled (MOSSY_API_KEY). /health and the Jira webhook are public.",
+                file=sys.stderr,
+                flush=True,
+            )
+        else:
+            print("HTTP API key auth enabled (MOSSY_API_KEY). /health is public.", file=sys.stderr, flush=True)
     else:
         print(
             "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, and /files.",
@@ -204,5 +222,7 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
         if not runtime.healthy():
             raise HTTPException(status_code=503, detail="starting")
         return {"ok": True}
+
+    register_jira_webhook_routes(app, runtime)
 
     return app
