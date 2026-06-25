@@ -19,6 +19,7 @@ from mossy.capabilities.freshdesk import freshdesk_capability
 from mossy.capabilities.jira import jira_capability
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
+from mossy.capabilities.shell import shell_capability
 from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
 from mossy.runtime.agent_run import run_agent_with_utc
@@ -116,6 +117,12 @@ class Runtime:
             exclude_skills=exclude_skills,
         ):
             capabilities.append(file_sharing_capability(self.repo_root))
+        if self._allows_skill_tools(
+            "shell",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            capabilities.append(shell_capability())
         return capabilities
 
     def _allows_skill_tools(
