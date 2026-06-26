@@ -11,6 +11,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import ModelMessage
 from rich.console import Console
 
+from mossy.capabilities.skill_manager import skill_manager_capability
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 
@@ -28,6 +29,10 @@ directly when the request can be resolved in the chat turn.
 Each user message is prefixed with `[System UTC now: …]` — use it as the authoritative clock for
 relative scheduling ("in 1 minute", "tomorrow"): compute scheduled_for in UTC from that line, not from
 memory.
+
+You can also manage the agent's installed skills with the skill-manager tools: when the user says
+"install skill X" call install_skill; when they say "delete/remove/uninstall skill X" call delete_skill.
+"X" is the skill's folder name. These take effect from the next message.
 
 Keep terminal output concise."""
 
@@ -93,7 +98,10 @@ async def stdin_loop(runtime: "Runtime") -> None:
         model,
         deps_type=RuntimeDeps,
         instructions=_CLI_INSTRUCTIONS,
-        capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
+        capabilities=[
+            *runtime.shared_capabilities(exclude_skills={"filesystem"}),
+            skill_manager_capability(runtime),
+        ],
         retries=3,  # recover from a failed tool call instead of breaking the run
     )
     deps = RuntimeDeps(runtime=runtime)
