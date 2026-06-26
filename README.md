@@ -19,7 +19,7 @@ A handful of small pieces, each doing one thing.
 - **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, and the task lifecycle.
 - **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, and a structured `result`.
 - **Skills** — packaged system skills live in `mossy/skills/<name>/`; downloadable or user-provided skills live in `skills/<name>/`. Each skill is a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers both roots, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to.
-- **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), and the dynamic `skills` capability.
+- **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), `skill-manager` (install/remove skills from a repository, CLI only), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
   - `http/app.py` — FastAPI endpoints (`/run`, `/status/{id}`, `/queue`, `/health`).
@@ -148,3 +148,35 @@ Use whenever the user asks about current or forecast weather.
 See the built-in `mossy/skills/filesystem/` system skill for a working example that bundles `SKILL.md` with a `scripts/` folder.
 
 Restart (or rely on auto-reload) and the worker will discover the skill on the next task. That's the whole extension model.
+
+---
+
+## Install skills from a repository
+
+Besides hand-authoring skills, Mossy can pull them from a Git repository straight from the CLI chat. The **skill-manager** capability adds two verbs to the interactive CLI:
+
+```text
+> install skill weather
+Skill 'weather' installed at skills/weather. It is wired to the agent and
+available from the next message.
+
+> delete skill weather
+Skill 'weather' deleted. It is un-wired from the agent and gone from the next message onward.
+```
+
+- **`install skill <name>`** clones the configured skills repository, takes the top-level folder named `<name>` (which must contain a `SKILL.md`), and (re)creates it at `skills/<name>`. Install is always a clean replace: an existing `skills/<name>` is removed first, then copied fresh.
+- **`delete skill <name>`** removes `skills/<name>`.
+
+Both take effect on the **next** message — the `skills/` directory is re-scanned before every run, so installing wires the skill to the agent and deleting un-wires it. No code changes or restart needed.
+
+### Point it at your own repository
+
+By default Mossy installs from a sample repository. Set your own in `.env` so your team installs from your catalog:
+
+```bash
+# .env
+MOSSY_SKILLS_REPO=https://github.com/your-org/your-skills   # public or private
+MOSSY_SKILLS_REPO_REF=main                                  # optional branch/tag/commit
+```
+
+Private repositories authenticate with the same `GITHUB_PERSONAL_ACCESS_TOKEN` used by the GitHub capability. Each top-level folder in the repo is an installable skill (a folder plus its `SKILL.md`), addressed by its folder name.
