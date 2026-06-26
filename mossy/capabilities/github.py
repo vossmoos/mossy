@@ -1,6 +1,6 @@
 """GitHub integration exposed as Pydantic AI capabilities.
 
-GitHub splits cleanly into two surfaces, and we expose both under the `github` skill:
+GitHub splits cleanly into three surfaces, and we expose all under the `github` skill:
 
 1. **Hosted GitHub MCP server** (API operations): reads, branches, commits via the
    API, pull requests, and issue/PR comments. Mounted as an MCP toolset. This is the
@@ -9,11 +9,16 @@ GitHub splits cleanly into two surfaces, and we expose both under the `github` s
 2. **Local git** (working-copy operations): clone, pull, create branches, commit, and
    push. The hosted MCP cannot touch a local checkout, so these shell out to `git`.
 
-`github_capabilities()` returns whichever of the two are available. If no GitHub token
-is set, the MCP capability is omitted; local git is always available where `git` is.
+3. **GitHub REST API** (repository discovery): list repositories the token can access.
+   Uses the same PAT as the MCP tools.
+
+`github_capabilities()` returns whichever surfaces are available. If no GitHub token
+is set, the MCP and REST API capabilities are omitted; local git is always available
+where `git` is.
 
 Env:
     GITHUB_PERSONAL_ACCESS_TOKEN (or GITHUB_TOKEN)  PAT with repo + PR scopes.
+    GITHUB_API_URL   optional override; defaults to https://api.github.com.
     GITHUB_MCP_URL   optional override; defaults to GitHub's hosted MCP endpoint.
     GITHUB_WORKDIR   optional base dir for clones (default: ./repos under CWD).
 """
@@ -21,14 +26,129 @@ Env:
 from __future__ import annotations
 
 import asyncio
+import json
 import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from pydantic_ai.capabilities.toolset import Toolset
 from pydantic_ai.toolsets import FunctionToolset
 
 DEFAULT_GITHUB_MCP_URL = "https://api.githubcopilot.com/mcp/"
+DEFAULT_GITHUB_API_URL = "https://api.github.com"
+
+
+def _github_token() -> str:
+    return (
+        os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
+        or os.environ.get("GITHUB_TOKEN")
+        or ""
+    ).strip()
+
+
+def _authed_repo_url(repo: str) -> str:
+    """Inject a GitHub token into an https repo URL so private clones/pushes work."""
+    token = _github_token()
+    if not token:
+        return repo
+    parts = urlsplit(repo)
+    if parts.scheme != "https" or "@" in parts.netloc:
+        return repo  # ssh URL, or credentials already present — leave as-is
+    netloc = f"x-access-token:{token}@{parts.netloc}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+
+
+def _redact(text: str) -> str:
+    token = _github_token()
+    return text.replace(token, "***") if token else text
+
+
+def _github_api_request(
+    method: str,
+    path: str,
+    *,
+    query: dict[str, str] | None = None,
+) -> tuple[int, Any]:
+    token = _github_token()
+    base = (os.environ.get("GITHUB_API_URL") or DEFAULT_GITHUB_API_URL).strip().rstrip("/")
+    clean_path = path if path.startswith("/") else f"/{path}"
+    url = f"{base}{clean_path}"
+    if query:
+        url += "?" + urllib.parse.urlencode(query)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+    req = urllib.request.Request(url, headers=headers, method=method)
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            status = resp.getcode() or 200
+            raw = resp.read()
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+        raw = exc.read() if exc.fp else b""
+    if not raw:
+        return status, None
+    try:
+        return status, json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return status, {"_raw": raw.decode("utf-8", errors="replace")}
+
+
+def _repo_summary(repo: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "full_name": repo.get("full_name"),
+        "clone_url": repo.get("clone_url"),
+        "html_url": repo.get("html_url"),
+        "private": repo.get("private"),
+        "default_branch": repo.get("default_branch"),
+        "description": repo.get("description") or "",
+    }
+
+
+def _list_repositories_sync(org: str | None, limit: int) -> dict[str, Any]:
+    repos: list[dict[str, Any]] = []
+    page = 1
+    per_page = min(100, limit)
+
+    while len(repos) < limit:
+        if org:
+            path = f"/orgs/{org.strip()}/repos"
+            query = {
+                "per_page": str(per_page),
+                "page": str(page),
+                "type": "all",
+                "sort": "updated",
+            }
+        else:
+            path = "/user/repos"
+            query = {
+                "affiliation": "owner,collaborator,organization_member",
+                "visibility": "all",
+                "sort": "updated",
+                "per_page": str(per_page),
+                "page": str(page),
+            }
+        status, data = _github_api_request("GET", path, query=query)
+        if status != 200:
+            message = data.get("message") if isinstance(data, dict) else str(data)
+            return {"ok": False, "status": status, "error": message or f"HTTP {status}"}
+        if not isinstance(data, list) or not data:
+            break
+        for repo in data:
+            if len(repos) >= limit:
+                break
+            repos.append(_repo_summary(repo))
+        if len(data) < per_page:
+            break
+        page += 1
+
+    return {"ok": True, "count": len(repos), "repositories": repos}
 
 
 def github_capabilities() -> list[Toolset]:
@@ -37,6 +157,9 @@ def github_capabilities() -> list[Toolset]:
     mcp = github_mcp_capability()
     if mcp is not None:
         caps.append(mcp)
+    api = github_api_capability()
+    if api is not None:
+        caps.append(api)
     caps.append(git_capability())
     return caps
 
@@ -46,11 +169,7 @@ def github_mcp_capability() -> Toolset | None:
 
     Returns None when no GitHub token is configured.
     """
-    token = (
-        os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN")
-        or os.environ.get("GITHUB_TOKEN")
-        or ""
-    ).strip()
+    token = _github_token()
     if not token:
         return None
 
@@ -65,6 +184,36 @@ def github_mcp_capability() -> Toolset | None:
         tool_prefix="github",
     )
     return Toolset(server)
+
+
+def github_api_capability() -> Toolset | None:
+    """Direct GitHub REST API helpers (no MCP). Returns None when no token is set."""
+    if not _github_token():
+        return None
+
+    async def github_list_repositories(
+        org: str | None = None,
+        limit: int = 100,
+    ) -> dict[str, Any]:
+        """List GitHub repositories available to the configured token.
+
+        Without `org`: repos you own, collaborate on, or access via org membership.
+        With `org`: repos in that organization (requires access). Returns `clone_url`
+        values suitable for `git_clone`.
+        """
+        limit = max(1, min(limit, 500))
+        return await asyncio.to_thread(_list_repositories_sync, org, limit)
+
+    return Toolset(
+        FunctionToolset(
+            [github_list_repositories],
+            id="github-api",
+            instructions=(
+                "GitHub REST API helpers. Use github_list_repositories to discover repos "
+                "the token can access before choosing a URL for git_clone."
+            ),
+        )
+    )
 
 
 def git_capability() -> Toolset:
@@ -85,19 +234,30 @@ def git_capability() -> Toolset:
             stderr=asyncio.subprocess.STDOUT,
         )
         out, _ = await proc.communicate()
+        command = "git " + " ".join(args)
+        output = out.decode("utf-8", errors="replace").strip()
         return {
             "ok": proc.returncode == 0,
             "exit_code": proc.returncode,
-            "command": "git " + " ".join(args),
-            "output": out.decode("utf-8", errors="replace").strip(),
+            "command": _redact(command),
+            "output": _redact(output),
         }
+
+    async def _ensure_authed_origin(path: str) -> None:
+        remote = await _git(["remote", "get-url", "origin"], cwd=path)
+        if not remote["ok"]:
+            return
+        url = remote["output"].strip()
+        authed = _authed_repo_url(url)
+        if authed != url:
+            await _git(["remote", "set-url", "origin", authed], cwd=path)
 
     async def git_clone(repo_url: str, directory: str | None = None) -> dict[str, Any]:
         """Clone a repo into GITHUB_WORKDIR. Returns the local path on success."""
         target_parent = _workdir()
         name = directory or repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
         dest = target_parent / name
-        result = await _git(["clone", repo_url, str(dest)])
+        result = await _git(["clone", _authed_repo_url(repo_url), str(dest)])
         result["path"] = str(dest)
         return result
 
@@ -122,6 +282,7 @@ def git_capability() -> Toolset:
 
     async def git_push(path: str, branch: str | None = None) -> dict[str, Any]:
         """Push the current (or named) branch, setting upstream if needed."""
+        await _ensure_authed_origin(path)
         args = ["push", "--set-upstream", "origin", branch] if branch else ["push"]
         return await _git(args, cwd=path)
 

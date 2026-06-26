@@ -166,6 +166,17 @@ Skill 'weather' deleted. It is un-wired from the agent and gone from the next me
 
 - **`install skill <name>`** clones the configured skills repository, takes the top-level folder named `<name>` (which must contain a `SKILL.md`), and (re)creates it at `skills/<name>`. Install is always a clean replace: an existing `skills/<name>` is removed first, then copied fresh.
 - **`delete skill <name>`** removes `skills/<name>`.
+- **`list skills available for install`** clones the repository and lists every installable skill (each top-level folder with a `SKILL.md`), with its description and whether it's already installed.
+- **`list skills enabled`** lists the skills currently installed under `skills/` (the ones wired to the agent).
+
+```text
+> list skills available for install
+weather  — Use this skill when the user asks about the weather.  (installed)
+jira      — Triage and comment on Jira issues.
+
+> list skills enabled
+weather  — Use this skill when the user asks about the weather.
+```
 
 Both take effect on the **next** message — the `skills/` directory is re-scanned before every run, so installing wires the skill to the agent and deleting un-wires it. No code changes or restart needed.
 

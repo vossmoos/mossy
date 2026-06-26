@@ -1,15 +1,15 @@
 ---
 name: github
-description: Use this skill to work with GitHub — clone/pull repos, create branches, commit and push, open pull requests, and comment on issues or PRs.
+description: Use this skill to work with GitHub — list available repos, clone/pull, create branches, commit and push, open pull requests, and comment on issues or PRs.
 ---
 
 # GitHub
 
 ## When To Use This Skill
 
-Use this skill when the user asks to work with a GitHub repository: clone or pull it,
-create a branch, commit and push changes, open a pull request, or comment on an issue
-or PR.
+Use this skill when the user asks to work with a GitHub repository: list available
+repos, clone or pull one, create a branch, commit and push changes, open a pull request,
+or comment on an issue or PR.
 
 This is the generic capability skill. Project-specific rules (e.g. "we only work via
 PRs", "never push to main", branch naming, comment templates) belong in a separate
@@ -17,7 +17,7 @@ project policy skill built on top of these tools.
 
 ## Instructions
 
-GitHub is split across two tool groups:
+GitHub is split across three tool groups:
 
 **Local git** (`git_*` tools) — for changes to a working copy:
 
@@ -28,12 +28,18 @@ GitHub is split across two tool groups:
 - `git_push` — push the branch (sets upstream when a branch is named).
 - `git_status` — inspect the working tree.
 
+**GitHub REST API** (`github_list_repositories`) — discover repos the token can access:
+
+- `github_list_repositories` — list repos (optionally scoped to an `org`); each entry
+  includes `clone_url` for `git_clone`. Requires `GITHUB_PERSONAL_ACCESS_TOKEN`.
+
 **GitHub API** (`github` MCP tools) — for server-side actions that don't need a
 checkout: open pull requests, comment on issues/PRs, and read repo/PR/issue data.
 Requires `GITHUB_PERSONAL_ACCESS_TOKEN`; if those tools are absent, GitHub is not
 configured.
 
-Typical flow for a change: `git_clone` (or `git_pull`) → `git_create_branch` → make
-edits → `git_commit_all` → `git_push` → open a PR via the GitHub MCP tools → comment if
-asked. Report the branch name, pushed commit, and PR URL. If a command fails, surface
-its `output` rather than retrying blindly.
+Typical flow for a change: `github_list_repositories` (when the repo is unknown) →
+`git_clone` (or `git_pull`) → `git_create_branch` → make edits → `git_commit_all` →
+`git_push` → open a PR via the GitHub MCP tools → comment if asked. Report the branch
+name, pushed commit, and PR URL. If a command fails, surface its `output` rather than
+retrying blindly.

@@ -83,6 +83,28 @@ async def _run_git(args: list[str], cwd: str | Path | None = None) -> dict[str, 
     }
 
 
+def _skill_description(skill_dir: Path) -> str:
+    """Best-effort read of the ``description`` field from a skill's SKILL.md frontmatter."""
+    skill_md = skill_dir / "SKILL.md"
+    try:
+        lines = skill_md.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return ""
+    if not lines or lines[0].strip() != "---":
+        return ""
+    for i in range(1, len(lines)):
+        line = lines[i]
+        if line.strip() == "---":
+            break
+        if line.startswith("description:"):
+            return line.split(":", 1)[1].strip().strip("'\"")
+    return ""
+
+
+def _is_skill_dir(path: Path) -> bool:
+    return path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").is_file()
+
+
 def skill_manager_capability(runtime: "Runtime") -> Toolset:
     """Return a toolset that installs/removes skills under the external skills root."""
 
@@ -202,18 +224,76 @@ def skill_manager_capability(runtime: "Runtime") -> Toolset:
             ),
         }
 
+    async def list_available_skills() -> dict[str, Any]:
+        """List skills available for install from the configured skills repository.
+
+        Clones the repo (``MOSSY_SKILLS_REPO`` / ``MOSSY_SKILLS_REPO_REF``) and returns
+        every top-level folder that contains a SKILL.md — i.e. everything that can be
+        passed to install_skill — each marked with whether it is already installed locally.
+
+        Returns a dict with keys: ok (bool), repo, ref, count, skills (list of
+        {name, description, installed}), and (on failure) error.
+        """
+        repo = (os.environ.get("MOSSY_SKILLS_REPO") or DEFAULT_SKILLS_REPO).strip()
+        ref = (os.environ.get("MOSSY_SKILLS_REPO_REF") or "").strip()
+        clone_url = _authed_repo_url(repo)
+
+        tmp = Path(tempfile.mkdtemp(prefix="mossy-skills-"))
+        try:
+            clone_args = ["clone", "--depth", "1"]
+            if ref:
+                clone_args += ["--branch", ref]
+            clone_args += [clone_url, str(tmp / "repo")]
+            clone = await _run_git(clone_args)
+            if not clone["ok"]:
+                return {"ok": False, "repo": repo, "ref": ref or None, "error": f"Failed to clone {repo}: {_redact(clone['output'])}"}
+
+            repo_dir = tmp / "repo"
+            skills = [
+                {
+                    "name": child.name,
+                    "description": _skill_description(child),
+                    "installed": (skills_root / child.name).is_dir(),
+                }
+                for child in sorted(repo_dir.iterdir())
+                if _is_skill_dir(child)
+            ]
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+        return {"ok": True, "repo": repo, "ref": ref or None, "count": len(skills), "skills": skills}
+
+    async def list_enabled_skills() -> dict[str, Any]:
+        """List skills currently installed (enabled) under the local skills/ folder.
+
+        These are the user/downloadable skills wired to the agent from the repo-root
+        ``skills/`` directory. Built-in package skills (mossy/skills/) are not listed.
+
+        Returns a dict with keys: ok (bool), root, count, skills (list of {name, description}).
+        """
+        if not skills_root.is_dir():
+            return {"ok": True, "root": str(skills_root), "count": 0, "skills": []}
+        skills = [
+            {"name": child.name, "description": _skill_description(child)}
+            for child in sorted(skills_root.iterdir())
+            if _is_skill_dir(child)
+        ]
+        return {"ok": True, "root": str(skills_root), "count": len(skills), "skills": skills}
+
     return Toolset(
         FunctionToolset(
-            [install_skill, delete_skill],
+            [install_skill, delete_skill, list_available_skills, list_enabled_skills],
             id="skill-manager",
             instructions=(
-                "Skill management tools for the operator. When the user says "
-                "'install skill X' call install_skill(name='X'); when they say "
-                "'delete skill X' (or remove/uninstall) call delete_skill(name='X'). "
-                "'X' is the skill's folder name. install_skill fetches X from the "
-                "mossy-skills repo and recreates skills/X (clean replace); delete_skill "
-                "removes skills/X. Both auto-wire/un-wire the skill, effective from the "
-                "next message. Report the returned message; on failure, report the error verbatim."
+                "Skill management tools for the operator. Map the user's intent to a tool: "
+                "'install skill X' -> install_skill(name='X'); 'delete/remove/uninstall skill X' "
+                "-> delete_skill(name='X'); 'list skills available for install' (what's in the repo) "
+                "-> list_available_skills(); 'list skills enabled/installed' (what's installed locally) "
+                "-> list_enabled_skills(). 'X' is the skill's folder name. install_skill fetches X "
+                "from the skills repo and recreates skills/X (clean replace); delete_skill removes "
+                "skills/X. Both auto-wire/un-wire the skill, effective from the next message. For the "
+                "list tools, present the skills as a concise name + description list. Report the "
+                "returned message; on failure, report the error verbatim."
             ),
         )
     )
