@@ -43,3 +43,15 @@ Typical flow for a change: `github_list_repositories` (when the repo is unknown)
 `git_push` → open a PR via the GitHub MCP tools → comment if asked. Report the branch
 name, pushed commit, and PR URL. If a command fails, surface its `output` rather than
 retrying blindly.
+
+## Commit identity
+
+`git_commit_all` sets author and committer explicitly — it does **not** inherit the
+machine's global git config. Defaults:
+
+- **name:** `mossy-mossy`
+- **email:** `services@vossmoos.com`
+
+Override via `MOSSY_GIT_USER_NAME` and `MOSSY_GIT_USER_EMAIL` in `.env` if needed.
+Do not run raw `git commit` via the shell skill for GitHub work; always use
+`git_commit_all` so the bot identity stays consistent.

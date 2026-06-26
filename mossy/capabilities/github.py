@@ -21,6 +21,8 @@ Env:
     GITHUB_API_URL   optional override; defaults to https://api.github.com.
     GITHUB_MCP_URL   optional override; defaults to GitHub's hosted MCP endpoint.
     GITHUB_WORKDIR   optional base dir for clones (default: ./repos under CWD).
+    MOSSY_GIT_USER_NAME   commit author/committer name (default: mossy-mossy).
+    MOSSY_GIT_USER_EMAIL  commit author/committer email (default: services@vossmoos.com).
 """
 
 from __future__ import annotations
@@ -65,6 +67,12 @@ def _authed_repo_url(repo: str) -> str:
 def _redact(text: str) -> str:
     token = _github_token()
     return text.replace(token, "***") if token else text
+
+
+def _git_commit_identity() -> tuple[str, str]:
+    name = (os.environ.get("MOSSY_GIT_USER_NAME") or "mossy-mossy").strip()
+    email = (os.environ.get("MOSSY_GIT_USER_EMAIL") or "services@vossmoos.com").strip()
+    return name, email
 
 
 def _github_api_request(
@@ -278,7 +286,11 @@ def git_capability() -> Toolset:
         staged = await _git(["add", "-A"], cwd=path)
         if not staged["ok"]:
             return staged
-        return await _git(["commit", "-m", message], cwd=path)
+        name, email = _git_commit_identity()
+        return await _git(
+            ["-c", f"user.name={name}", "-c", f"user.email={email}", "commit", "-m", message],
+            cwd=path,
+        )
 
     async def git_push(path: str, branch: str | None = None) -> dict[str, Any]:
         """Push the current (or named) branch, setting upstream if needed."""
