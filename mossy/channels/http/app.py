@@ -35,12 +35,14 @@ def _configured_api_key() -> str:
 
 
 def _auth_exempt_paths(*, extra: frozenset[str] = frozenset()) -> frozenset[str]:
-    """Paths that skip API key auth. /ui is public so the browser can load the
-    chat page before the user enters their key."""
+    """Paths that skip API key auth. /ui and /aui are public so the browser can
+    load the chat pages before the user enters their key."""
     return frozenset({
         _normalize_path("/health"),
         _normalize_path("/ui"),
         _normalize_path("/ui/"),
+        _normalize_path("/aui"),
+        _normalize_path("/aui/"),
     }) | extra
 
 
@@ -76,7 +78,7 @@ class RunBody(BaseModel):
     scheduled_for: datetime | None = None
 
 
-def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
+def create_app(runtime: "Runtime", *, enable_agui: bool = True, enable_aui: bool = True) -> FastAPI:
     app = FastAPI(title="mossy")
 
     from mossy.channels.jira_webhook import (
@@ -124,6 +126,16 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True) -> FastAPI:
 
     register_web_routes(app, agui_path=agui_path)
     print("Web UI channel enabled at GET /ui", file=sys.stderr, flush=True)
+
+    if enable_aui:
+        from mossy.channels.aui.app import register_aui_routes
+
+        aui_channel = register_aui_routes(app, runtime)
+        print(
+            f"Adaptive UI channel enabled at GET /aui (agent endpoint POST {aui_channel.path})",
+            file=sys.stderr,
+            flush=True,
+        )
 
     @app.post("/run")
     async def run_task(body: RunBody) -> dict[str, str | None]:

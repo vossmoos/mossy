@@ -7,7 +7,8 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Adaptive UI.** Skills can render interactive widget boxes next to the chat — cards, tables, progress, logs, documents — with zero frontend changes per skill. See below.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
 ---
@@ -24,6 +25,8 @@ A handful of small pieces, each doing one thing.
   - `cli/chat.py` — interactive terminal agent with conversation history.
   - `http/app.py` — FastAPI endpoints (`/run`, `/status/{id}`, `/queue`, `/health`).
   - `agui/app.py` — AG-UI protocol over SSE for web chat clients (`POST /agui`). See `mossy/channels/agui/README.md`.
+  - `web/app.py` — self-contained browser chat page (`GET /ui`) streaming from the AG-UI endpoint.
+  - `aui/app.py` — adaptive UI (`GET /aui`): chat plus a skill-driven widget panel. See `mossy/channels/aui/README.md`.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
@@ -71,6 +74,7 @@ python main.py --no-http        # just the CLI + runtime
 python main.py --no-cli         # headless: HTTP only
 python main.py --no-slack       # disable the Slack channel
 python main.py --no-agui        # disable the AG-UI web chat endpoint
+python main.py --no-aui         # disable the adaptive UI channel
 python main.py --port 9000      # change HTTP port
 ```
 
@@ -83,6 +87,23 @@ curl -X POST http://127.0.0.1:8765/run \
   -H 'content-type: application/json' \
   -d '{"payload": "Summarize today's queue and tell me what's pending."}'
 ```
+
+---
+
+## Adaptive UI: skill-driven widgets (`/aui`)
+
+Open `http://127.0.0.1:8765/aui` for a chat with an **adaptive side panel**. Skills render interactive widget boxes next to the conversation — no frontend work per skill: the skill's `SKILL.md` tells the agent what to show, the agent calls the generic `panel_*` tools, and the panel updates live over the same SSE stream. Buttons send messages back into the chat, so every action also works by typing it — the same skills run unchanged on `/ui`, CLI, and Slack, where the panel simply doesn't exist.
+
+Six widget types cover the vocabulary:
+
+1. **`card_grid`** — entity teasers with a detail popup and action buttons per card.
+2. **`table`** — compact tabular data: columns and rows.
+3. **`markdown`** — free-form formatted text, summaries, notes.
+4. **`progress`** — status line with a progress bar for long-running work, updated in place.
+5. **`log`** — a streaming console for live output, appendable line by line.
+6. **`document`** — a shared file such as a generated PDF report, with Open/Download buttons.
+
+Skill-authoring contract, JSON schemas, and worked examples: `mossy/channels/aui/README.md`.
 
 ---
 

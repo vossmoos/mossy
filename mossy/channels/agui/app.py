@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import os
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ag_ui.core import RunAgentInput, UserMessage
 from ag_ui.core.types import TextInputContent
@@ -99,14 +99,27 @@ def inject_utc_into_run_input(run_input: RunAgentInput) -> RunAgentInput:
 class AguiChannel:
     """Expose Mossy over the AG-UI protocol (SSE event stream)."""
 
-    def __init__(self, runtime: "Runtime") -> None:
+    def __init__(
+        self,
+        runtime: "Runtime",
+        *,
+        path: str | None = None,
+        extra_capabilities: list[Any] | None = None,
+        extra_instructions: str | None = None,
+    ) -> None:
         self.runtime = runtime
-        self.path = _agui_path()
+        self.path = path or _agui_path()
+        instructions = _AGUI_INSTRUCTIONS
+        if extra_instructions:
+            instructions = f"{instructions}\n\n{extra_instructions}"
+        capabilities: list[Any] = list(runtime.shared_capabilities())
+        if extra_capabilities:
+            capabilities.extend(extra_capabilities)
         self.agent = Agent(
             _agui_model(),
             deps_type=RuntimeDeps,
-            instructions=_AGUI_INSTRUCTIONS,
-            capabilities=runtime.shared_capabilities(),
+            instructions=instructions,
+            capabilities=capabilities,
             # Give the model room to recover from a failed tool call (ModelRetry feeds
             # the error back) instead of the run dying on the first stumble.
             retries=3,

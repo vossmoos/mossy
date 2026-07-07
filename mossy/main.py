@@ -18,8 +18,10 @@ from mossy.channels.http.app import create_app
 from mossy.runtime import Runtime
 
 
-async def _http(runtime: Runtime, host: str, port: int, *, enable_agui: bool) -> None:
-    app = create_app(runtime, enable_agui=enable_agui)
+async def _http(
+    runtime: Runtime, host: str, port: int, *, enable_agui: bool, enable_aui: bool
+) -> None:
+    app = create_app(runtime, enable_agui=enable_agui, enable_aui=enable_aui)
     cfg = uvicorn.Config(app, host=host, port=port, loop="asyncio", log_level="warning")
     server = uvicorn.Server(cfg)
     await server.serve()
@@ -33,13 +35,22 @@ async def main() -> None:
     p.add_argument("--no-cli", action="store_true")
     p.add_argument("--no-slack", action="store_true")
     p.add_argument("--no-agui", action="store_true")
+    p.add_argument("--no-aui", action="store_true")
     args = p.parse_args()
 
     runtime = Runtime()
 
     tasks = [runtime.start()]
     if not args.no_http:
-        tasks.append(_http(runtime, args.host, args.port, enable_agui=not args.no_agui))
+        tasks.append(
+            _http(
+                runtime,
+                args.host,
+                args.port,
+                enable_agui=not args.no_agui,
+                enable_aui=not args.no_aui,
+            )
+        )
     if not args.no_cli:
         tasks.append(stdin_loop(runtime))
     if not args.no_slack:
