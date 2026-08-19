@@ -31,73 +31,7 @@ A handful of small pieces, each doing one thing.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
-That's the whole platform. Everything else is a skill. The sentinel loop is what keeps Mossy able to start work without a user message.
-
----
-
-## Duties
-
-A **skill** is how a task is resolved. A **duty** is autonomous work: Mossy decides to put a task on the queue with no inbound message (chat, HTTP, and Slack still enqueue from the outside).
-
-The **sentinel loop** runs for the life of the process — a permanently repeating loop, not a one-shot schedule. Each pass is not an LLM call.
-
-1. **`check(now)`** — should this duty start work on this pass? If yes, enqueue `kind="evaluate_duty"`.
-2. **`evaluate(payload, runtime)`** — Python only (count, filter, fetch). No skill, no model. Return `[]` to stop, or enqueue `kind="goal"` tasks.
-3. **Worker** — each goal is a normal queue item. The worker picks a skill and runs it, same as any other task.
-
-`dedupe_key` (for example `ops_digest:2026-08-19`) means that window is queued at most once per process. The queue is in-memory, so a restart can fire again.
-
-Framework: `mossy/duties/`. User duties: a Python module under repo-root `duties/` with `@register`. Restart after adding a file.
-
-### Example: ops digest
-
-Ships **inert**. When enabled, once per day:
-
-- `duties/ops_digest.py` — `check()` at `OPS_DIGEST_HOUR_UTC`; `evaluate()` counts pending / running / failed / done and enqueues a goal that already contains the line.
-- `skills/ops-digest/` — the worker prints that line to stderr.
-
-```text
-Mossy ops 2026-08-19: 2 pending, 1 running, 0 failed, 14 done
-```
-
-```bash
-# .env
-OPS_DIGEST_ENABLED=true
-OPS_DIGEST_HOUR_UTC=13    # 0–23 UTC, default 13
-```
-
-Turn the sentinel loop off with `--no-duties` or `PLATFORMER_DISABLE_DUTIES=1`.
-
-### Write a duty
-
-```python
-from mossy.duties.base import Duty, EnqueueRequest, register
-
-@register
-class Ping(Duty):
-    name = "ping"
-
-    async def check(self, now):
-        if now.minute != 0 or now.second >= 8:
-            return []
-        hour = now.strftime("%Y-%m-%dT%H")
-        return [EnqueueRequest(
-            kind="evaluate_duty",
-            payload={"duty": self.name, "hour": hour},
-            dedupe_key=f"ping:{hour}",
-        )]
-
-    async def evaluate(self, payload, runtime):
-        hour = payload.get("hour", "")
-        # hardcoded work here, then enqueue a goal (or return [])
-        return [EnqueueRequest(
-            kind="goal",
-            goal=f"Print a one-line ping to stderr for {hour}.",
-            dedupe_key=f"ping:print:{hour}",
-        )]
-```
-
-The goal text should match a skill description so the worker selects that skill.
+That's the whole platform. Everything else is a skill.
 
 ---
 
@@ -280,3 +214,69 @@ MOSSY_SKILLS_REPO_REF=main                                  # optional branch/ta
 ```
 
 Private repositories authenticate with the same `GITHUB_PERSONAL_ACCESS_TOKEN` used by the GitHub capability. Each top-level folder in the repo is an installable skill (a folder plus its `SKILL.md`), addressed by its folder name.
+
+---
+
+## Duties
+
+A **skill** is how a task is resolved. A **duty** is autonomous work: Mossy decides to put a task on the queue with no inbound message (chat, HTTP, and Slack still enqueue from the outside).
+
+The **sentinel loop** runs for the life of the process — a permanently repeating loop, not a one-shot schedule. Each pass is not an LLM call.
+
+1. **`check(now)`** — should this duty start work on this pass? If yes, enqueue `kind="evaluate_duty"`.
+2. **`evaluate(payload, runtime)`** — Python only (count, filter, fetch). No skill, no model. Return `[]` to stop, or enqueue `kind="goal"` tasks.
+3. **Worker** — each goal is a normal queue item. The worker picks a skill and runs it, same as any other task.
+
+`dedupe_key` (for example `ops_digest:2026-08-19`) means that window is queued at most once per process. The queue is in-memory, so a restart can fire again.
+
+Framework: `mossy/duties/`. User duties: a Python module under repo-root `duties/` with `@register`. Restart after adding a file.
+
+### Example: ops digest
+
+Ships **inert**. When enabled, once per day:
+
+- `duties/ops_digest.py` — `check()` at `OPS_DIGEST_HOUR_UTC`; `evaluate()` counts pending / running / failed / done and enqueues a goal that already contains the line.
+- `skills/ops-digest/` — the worker prints that line to stderr.
+
+```text
+Mossy ops 2026-08-19: 2 pending, 1 running, 0 failed, 14 done
+```
+
+```bash
+# .env
+OPS_DIGEST_ENABLED=true
+OPS_DIGEST_HOUR_UTC=13    # 0–23 UTC, default 13
+```
+
+Turn the sentinel loop off with `--no-duties` or `PLATFORMER_DISABLE_DUTIES=1`.
+
+### Write a duty
+
+```python
+from mossy.duties.base import Duty, EnqueueRequest, register
+
+@register
+class Ping(Duty):
+    name = "ping"
+
+    async def check(self, now):
+        if now.minute != 0 or now.second >= 8:
+            return []
+        hour = now.strftime("%Y-%m-%dT%H")
+        return [EnqueueRequest(
+            kind="evaluate_duty",
+            payload={"duty": self.name, "hour": hour},
+            dedupe_key=f"ping:{hour}",
+        )]
+
+    async def evaluate(self, payload, runtime):
+        hour = payload.get("hour", "")
+        # hardcoded work here, then enqueue a goal (or return [])
+        return [EnqueueRequest(
+            kind="goal",
+            goal=f"Print a one-line ping to stderr for {hour}.",
+            dedupe_key=f"ping:print:{hour}",
+        )]
+```
+
+The goal text should match a skill description so the worker selects that skill.
