@@ -1,9 +1,8 @@
-"""Daily one-line queue digest on stderr. Ships inert until enabled."""
+"""Daily ops digest: evaluate() counts the queue, then enqueues a print task."""
 
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -66,8 +65,13 @@ class OpsDigest(Duty):
             f"{counts[TaskStatus.FAILED]} failed, "
             f"{counts[TaskStatus.DONE]} done"
         )
-        print(line, file=sys.stderr, flush=True)
-        if skip_id and skip_id in runtime.tasks:
-            current = runtime.tasks[skip_id]
-            current.result = {**(current.result or {}), "digest": line}
-        return []
+        return [
+            EnqueueRequest(
+                kind="goal",
+                goal=(
+                    f"Print this one-line ops digest to stderr exactly, and nothing else: {line}"
+                ),
+                dedupe_key=f"ops_digest:print:{day}",
+                context={"duty": self.name, "day": day, "digest": line},
+            )
+        ]

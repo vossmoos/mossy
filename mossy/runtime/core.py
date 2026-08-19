@@ -243,31 +243,30 @@ class Runtime:
         if request.dedupe_key and self._dedupe_seen(request.dedupe_key):
             return None
 
+        extra = dict(request.context or {})
+        extra["source"] = extra.get("source") or "duty"
+
         if request.kind == "evaluate_duty":
-            duty_name = str(request.payload.get("duty") or "").strip()
+            duty_name = str(request.payload.get("duty") or extra.get("duty") or "").strip()
             if not duty_name:
                 logger.warning("evaluate_duty request missing duty name")
                 return None
+            extra["kind"] = "evaluate_duty"
+            extra["duty"] = duty_name
+            extra["payload"] = request.payload
             task = Task(
                 id=str(uuid.uuid4()),
                 goal=f"[duty:{duty_name}]",
                 priority=int(request.priority),
                 not_before=request.not_before,
                 dedupe_key=request.dedupe_key,
-                context={
-                    "kind": "evaluate_duty",
-                    "duty": duty_name,
-                    "payload": request.payload,
-                    "source": "duty",
-                },
+                context=extra,
             )
         elif request.kind == "goal":
-            goal = str(request.payload.get("goal") or "").strip()
+            goal = (request.goal or str(request.payload.get("goal") or "")).strip()
             if not goal:
                 logger.warning("goal request missing goal")
                 return None
-            extra = dict(request.payload.get("context") or {})
-            extra["source"] = extra.get("source") or "duty"
             task = Task(
                 id=str(uuid.uuid4()),
                 goal=goal,
@@ -353,6 +352,10 @@ class Runtime:
                     enqueued.id,
                 )
         task.result = {**(task.result or {}), "duty": duty.name}
+        if followups:
+            digest = (followups[0].context or {}).get("digest")
+            if digest:
+                task.result["digest"] = digest
         task.status = TaskStatus.DONE
 
     async def duty_loop(self) -> None:
@@ -369,9 +372,10 @@ class Runtime:
                         enqueued = await self.enqueue_request(request)
                         if enqueued:
                             logger.info(
-                                "Duty %s enqueued kind=%s dedupe_key=%s",
+                                "Duty %s enqueued kind=%s id=%s dedupe_key=%s",
                                 duty.name,
                                 request.kind,
+                                enqueued.id,
                                 request.dedupe_key,
                             )
                 except Exception:

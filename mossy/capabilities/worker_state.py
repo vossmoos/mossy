@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime
 from typing import Any
 
@@ -22,6 +23,12 @@ def worker_state_capability(task: Task) -> Toolset:
         """Persist structured result data for the active task."""
         task.result = dict(result)
         return "recorded"
+
+    async def print_stderr(line: str) -> str:
+        """Write one line to the process stderr (the terminal)."""
+        text = str(line).splitlines()[0] if line else ""
+        print(text, file=sys.stderr, flush=True)
+        return "printed"
 
     async def set_follow_up_goal(
         goal: str,
@@ -45,11 +52,12 @@ def worker_state_capability(task: Task) -> Toolset:
 
     return Toolset(
         FunctionToolset(
-            [current_task, record_task_result, set_follow_up_goal],
+            [current_task, record_task_result, print_stderr, set_follow_up_goal],
             id="worker-state",
             instructions=(
                 "Use these tools when running a queued task to inspect the active task, "
-                "persist structured task results, or request a follow-up task."
+                "print one line to the terminal (print_stderr), persist structured task "
+                "results, or request a follow-up task."
             ),
         )
     )
