@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from collections.abc import Collection
@@ -22,11 +23,14 @@ from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.shell import shell_capability
 from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
+from mossy.duties.base import EnqueueRequest
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, Priority, Task, TaskStatus
 from mossy.runtime.queue import TaskQueue
 from mossy.skills.selection import SkillSelection, skills_capability
+
+logger = logging.getLogger(__name__)
 
 
 class Runtime:
@@ -34,6 +38,7 @@ class Runtime:
         self,
         skills_root: Path | None = None,
         external_skills_root: Path | None = None,
+        enable_duties: bool | None = None,
     ) -> None:
         pkg_root = Path(__file__).resolve().parents[1]   # the `mossy` package
         repo_root = Path(__file__).resolve().parents[2]  # repo root (one above the package)
@@ -46,8 +51,14 @@ class Runtime:
         self.queue = TaskQueue()
         self.inbox: asyncio.Queue[Envelope] = asyncio.Queue()
         self.tasks: dict[str, Task] = {}
+        self._dedupe_keys: set[str] = set()
+        self._active_task_id: str | None = None
+        if enable_duties is None:
+            enable_duties = not bool(os.getenv("PLATFORMER_DISABLE_DUTIES"))
+        self.enable_duties = enable_duties
         self._live_inbox = asyncio.Event()
         self._live_work = asyncio.Event()
+        self._live_duties = asyncio.Event()
         self._worker_model = os.getenv("PLATFORMER_SKILL_MODEL", "openai:gpt-5.4-mini")
         self._worker: Agent[RuntimeDeps, str] | None = None
 
@@ -216,7 +227,64 @@ class Runtime:
         return task
 
     def healthy(self) -> bool:
-        return self._live_inbox.is_set() and self._live_work.is_set()
+        if not (self._live_inbox.is_set() and self._live_work.is_set()):
+            return False
+        if self.enable_duties and not self._live_duties.is_set():
+            return False
+        return True
+
+    def _dedupe_seen(self, key: str) -> bool:
+        if key in self._dedupe_keys:
+            return True
+        return any(task.dedupe_key == key for task in self.tasks.values())
+
+    async def enqueue_request(self, request: EnqueueRequest) -> Task | None:
+        """Push a duty-originated request onto the queue. None if deduped or invalid."""
+        if request.dedupe_key and self._dedupe_seen(request.dedupe_key):
+            return None
+
+        if request.kind == "evaluate_duty":
+            duty_name = str(request.payload.get("duty") or "").strip()
+            if not duty_name:
+                logger.warning("evaluate_duty request missing duty name")
+                return None
+            task = Task(
+                id=str(uuid.uuid4()),
+                goal=f"[duty:{duty_name}]",
+                priority=int(request.priority),
+                not_before=request.not_before,
+                dedupe_key=request.dedupe_key,
+                context={
+                    "kind": "evaluate_duty",
+                    "duty": duty_name,
+                    "payload": request.payload,
+                    "source": "duty",
+                },
+            )
+        elif request.kind == "goal":
+            goal = str(request.payload.get("goal") or "").strip()
+            if not goal:
+                logger.warning("goal request missing goal")
+                return None
+            extra = dict(request.payload.get("context") or {})
+            extra["source"] = extra.get("source") or "duty"
+            task = Task(
+                id=str(uuid.uuid4()),
+                goal=goal,
+                priority=int(request.priority),
+                not_before=request.not_before,
+                dedupe_key=request.dedupe_key,
+                context=extra,
+            )
+        else:
+            logger.warning("unknown enqueue kind %s", request.kind)
+            return None
+
+        self.tasks[task.id] = task
+        if request.dedupe_key:
+            self._dedupe_keys.add(request.dedupe_key)
+        await self.queue.push(task)
+        return task
 
     def _ready(self, task: Task) -> bool:
         if task.status == TaskStatus.CANCELLED:
@@ -248,7 +316,11 @@ class Runtime:
         task.status = TaskStatus.RUNNING
         task.error = None
         task.result = {}
+        self._active_task_id = task.id
         try:
+            if task.context.get("kind") == "evaluate_duty":
+                await self._execute_duty(task)
+                return
             deps = RuntimeDeps(runtime=self, task=task)
             capabilities = [worker_state_capability(task), *self.shared_capabilities()]
             run = await run_agent_with_utc(
@@ -261,6 +333,50 @@ class Runtime:
             task.status = TaskStatus.FAILED
             task.error = str(exc)
             task.result = {**(task.result or {}), "error": str(exc)}
+        finally:
+            self._active_task_id = None
+
+    async def _execute_duty(self, task: Task) -> None:
+        from mossy.duties import get_duty
+
+        duty_name = str(task.context.get("duty") or "").strip()
+        payload = dict(task.context.get("payload") or {})
+        duty = get_duty(duty_name, self.repo_root)
+        followups = await duty.evaluate(payload, self)
+        for request in followups:
+            enqueued = await self.enqueue_request(request)
+            if enqueued:
+                logger.info(
+                    "Duty %s follow-up enqueued kind=%s id=%s",
+                    duty.name,
+                    request.kind,
+                    enqueued.id,
+                )
+        task.result = {**(task.result or {}), "duty": duty.name}
+        task.status = TaskStatus.DONE
+
+    async def duty_loop(self) -> None:
+        from mossy.duties import discover_duties
+
+        self._live_duties.set()
+        duties = discover_duties(self.repo_root)
+        logger.info("Duties started: %s", [duty.name for duty in duties])
+        while True:
+            now = datetime.now(UTC)
+            for duty in duties:
+                try:
+                    for request in await duty.check(now):
+                        enqueued = await self.enqueue_request(request)
+                        if enqueued:
+                            logger.info(
+                                "Duty %s enqueued kind=%s dedupe_key=%s",
+                                duty.name,
+                                request.kind,
+                                request.dedupe_key,
+                            )
+                except Exception:
+                    logger.exception("duty %s failed", duty.name)
+            await asyncio.sleep(1)
 
     async def think_next(self, task: Task) -> None:
         if os.getenv("PLATFORMER_DISABLE_AUTONOMOUS"):
@@ -285,4 +401,7 @@ class Runtime:
                 await self.queue.push(idle)
 
     async def start(self) -> None:
-        await asyncio.gather(self.inbox_loop(), self.work_loop())
+        loops = [self.inbox_loop(), self.work_loop()]
+        if self.enable_duties:
+            loops.append(self.duty_loop())
+        await asyncio.gather(*loops)

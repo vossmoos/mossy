@@ -36,9 +36,10 @@ async def main() -> None:
     p.add_argument("--no-slack", action="store_true")
     p.add_argument("--no-agui", action="store_true")
     p.add_argument("--no-aui", action="store_true")
+    p.add_argument("--no-duties", action="store_true")
     args = p.parse_args()
 
-    runtime = Runtime()
+    runtime = Runtime(enable_duties=False if args.no_duties else None)
 
     tasks = [runtime.start()]
     if not args.no_http:

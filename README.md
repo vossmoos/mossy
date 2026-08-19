@@ -17,9 +17,10 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 
 A handful of small pieces, each doing one thing.
 
-- **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, and the task lifecycle.
-- **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, and a structured `result`.
+- **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, the duty sentinel, and the task lifecycle.
+- **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, `dedupe_key`, and a structured `result`.
 - **Skills** — packaged system skills live in `mossy/skills/<name>/`; downloadable or user-provided skills live in `skills/<name>/`. Each skill is a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers both roots, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to.
+- **Duties** (`mossy/duties/`) — proactive jobs on a clock, not a chat turn. A 1s sentinel calls `check(now)` (cadence only, no LLM). When due, Mossy enqueues a normal task; the worker runs `evaluate()` instead of the chat agent. `dedupe_key` makes each window fire once. User duties live in repo-root `duties/`.
 - **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), `skill-manager` (install/remove skills from a repository, CLI only), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
@@ -30,7 +31,58 @@ A handful of small pieces, each doing one thing.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
-That's the whole platform. Everything else is a skill.
+That's the whole platform. Everything else is a skill or a duty.
+
+---
+
+## Duties
+
+Skills react to a message. Duties fire on a clock.
+
+The sentinel loop asks every second whether a duty is due (`check`). If it is, Mossy enqueues a task. The existing worker pops it and runs `evaluate` — no chat agent unless the duty itself enqueues a follow-up goal. A `dedupe_key` such as `ops_digest:2026-08-19` prevents the same window from being queued twice in a process (the queue is in-memory, so a restart can fire again).
+
+The framework lives in `mossy/duties/`. User duties are Python modules under repo-root `duties/` (same `@register` pattern). Restart to pick up a new duty file.
+
+### Example: ops digest (`duties/ops_digest.py`)
+
+Once a day, prints one line to stderr with queue counts. Ships **inert**.
+
+```text
+Mossy ops 2026-08-19: 2 pending, 1 running, 0 failed, 14 done
+```
+
+```bash
+# .env
+OPS_DIGEST_ENABLED=true
+OPS_DIGEST_HOUR_UTC=13    # 0–23, default 13
+```
+
+Disable the sentinel entirely with `--no-duties` or `PLATFORMER_DISABLE_DUTIES=1`.
+
+### Write a duty
+
+```python
+from mossy.duties.base import Duty, EnqueueRequest, register
+
+@register
+class Ping(Duty):
+    name = "ping"
+
+    async def check(self, now):
+        # cadence only — no I/O, no LLM
+        if now.minute != 0 or now.second >= 8:
+            return []
+        hour = now.strftime("%Y-%m-%dT%H")
+        return [EnqueueRequest(
+            kind="evaluate_duty",
+            payload={"duty": self.name, "hour": hour},
+            dedupe_key=f"ping:{hour}",
+        )]
+
+    async def evaluate(self, payload, runtime):
+        print("ping", payload.get("hour"))
+        return []  # or more EnqueueRequest(kind="goal", payload={"goal": "…"})
+```
 
 ---
 
@@ -63,7 +115,7 @@ python main.py
 
 This starts everything at once:
 
-- the **runtime** (inbox + worker loop),
+- the **runtime** (inbox + worker loop + duty sentinel),
 - the **HTTP API** on `http://127.0.0.1:8765`,
 - the **CLI chat** on stdin.
 
@@ -75,6 +127,7 @@ python main.py --no-cli         # headless: HTTP only
 python main.py --no-slack       # disable the Slack channel
 python main.py --no-agui        # disable the AG-UI web chat endpoint
 python main.py --no-aui         # disable the adaptive UI channel
+python main.py --no-duties      # disable the duty sentinel loop
 python main.py --port 9000      # change HTTP port
 ```
 

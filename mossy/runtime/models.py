@@ -44,6 +44,7 @@ class Task(BaseModel):
     status: TaskStatus = TaskStatus.PENDING
     depends_on: list[str] = Field(default_factory=list)
     not_before: datetime | None = None
+    dedupe_key: str | None = None
     result: dict[str, Any] | None = None
     context: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
