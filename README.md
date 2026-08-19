@@ -20,7 +20,7 @@ A handful of small pieces, each doing one thing.
 - **Runtime** (`mossy/runtime/core.py`) — the heart. Owns the inbox, the queue, the worker agent, the duty sentinel, and the task lifecycle.
 - **Task & Envelope** (`mossy/runtime/models.py`) — typed units of work, with `Priority` (`INTERRUPT → IDLE`), `depends_on`, `dedupe_key`, and a structured `result`.
 - **Skills** — packaged system skills live in `mossy/skills/<name>/`; downloadable or user-provided skills live in `skills/<name>/`. Each skill is a `SKILL.md` with YAML frontmatter, plus any helper scripts (e.g. `scripts/*.py`) or assets the skill calls. The worker discovers both roots, picks the relevant skill, loads its instructions, and runs the bundled scripts when told to.
-- **Duties** (`mossy/duties/`) — a clock that can run a bit of code, then put work on the same queue. A 1s sentinel calls `check(now)` (cadence only). That enqueues `evaluate_duty`; `evaluate()` does programmatic work (no LLM) and may enqueue a **goal**. The worker resolves goals with skills, same as chat or HTTP. `dedupe_key` makes each window fire once. User duties live in repo-root `duties/`.
+- **Duties** (`mossy/duties/`) — a living **sentinel loop**: it runs for as long as Mossy does, and is how the agent starts work on its own. Each pass calls `check()` (cheap, no LLM). If a duty wants work, it enqueues `evaluate_duty`; `evaluate()` runs Python and may enqueue a **goal**. The worker resolves goals with skills, same as chat or HTTP. `dedupe_key` keeps a window from being queued twice. User duties live in repo-root `duties/`.
 - **Capabilities** (`mossy/capabilities/`) — toolsets exposed to agents through skills: `system-queue` (enqueue, cancel, inspect tasks), `worker-state` (record results, follow-ups), `mossy-personality` (always-on identity and tone instructions loaded from root `MOSSY.md`), `skill-manager` (install/remove skills from a repository, CLI only), and the dynamic `skills` capability.
 - **Channels** (`mossy/channels/`) — input/output surfaces:
   - `cli/chat.py` — interactive terminal agent with conversation history.
@@ -31,17 +31,17 @@ A handful of small pieces, each doing one thing.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
-That's the whole platform. Everything else is a skill. Duties check the clock, run code, then enqueue work.
+That's the whole platform. Everything else is a skill. The sentinel loop is what keeps Mossy able to start work without a user message.
 
 ---
 
 ## Duties
 
-A **skill** is how a task is resolved. A **duty** is how Mossy puts a task on the queue by itself (chat, HTTP, and Slack do the same from the outside).
+A **skill** is how a task is resolved. A **duty** is autonomous work: Mossy decides to put a task on the queue with no inbound message (chat, HTTP, and Slack still enqueue from the outside).
 
-The sentinel ticks every second. That tick is not an LLM call.
+The **sentinel loop** runs for the life of the process — a permanently repeating loop, not a one-shot schedule. Each pass is not an LLM call.
 
-1. **`check(now)`** — cadence only. If it is time, enqueue `kind="evaluate_duty"`.
+1. **`check(now)`** — should this duty start work on this pass? If yes, enqueue `kind="evaluate_duty"`.
 2. **`evaluate(payload, runtime)`** — Python only (count, filter, fetch). No skill, no model. Return `[]` to stop, or enqueue `kind="goal"` tasks.
 3. **Worker** — each goal is a normal queue item. The worker picks a skill and runs it, same as any other task.
 
@@ -66,7 +66,7 @@ OPS_DIGEST_ENABLED=true
 OPS_DIGEST_HOUR_UTC=13    # 0–23 UTC, default 13
 ```
 
-Turn the sentinel off with `--no-duties` or `PLATFORMER_DISABLE_DUTIES=1`.
+Turn the sentinel loop off with `--no-duties` or `PLATFORMER_DISABLE_DUTIES=1`.
 
 ### Write a duty
 
