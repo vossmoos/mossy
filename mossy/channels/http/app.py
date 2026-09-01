@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -78,8 +79,28 @@ class RunBody(BaseModel):
     scheduled_for: datetime | None = None
 
 
-def create_app(runtime: "Runtime", *, enable_agui: bool = True, enable_aui: bool = True) -> FastAPI:
-    app = FastAPI(title="mossy")
+def create_app(
+    runtime: "Runtime",
+    *,
+    enable_agui: bool = True,
+    enable_aui: bool = True,
+    enable_mcp: bool = True,
+) -> FastAPI:
+    mcp_channel = None
+    if enable_mcp:
+        from mossy.channels.mcp.app import McpChannel
+
+        mcp_channel = McpChannel(runtime)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if mcp_channel is None:
+            yield
+            return
+        async with mcp_channel.session_lifespan():
+            yield
+
+    app = FastAPI(title="mossy", lifespan=lifespan)
 
     from mossy.channels.jira_webhook import (
         configured_webhook_path,
@@ -109,7 +130,7 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True, enable_aui: bool
             print("HTTP API key auth enabled (MOSSY_API_KEY). /health is public.", file=sys.stderr, flush=True)
     else:
         print(
-            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, and /files.",
+            "HTTP API key auth disabled: set MOSSY_API_KEY to protect /run, /agui, /queue, /files, and /mcp.",
             file=sys.stderr,
             flush=True,
         )
@@ -133,6 +154,16 @@ def create_app(runtime: "Runtime", *, enable_agui: bool = True, enable_aui: bool
         aui_channel = register_aui_routes(app, runtime)
         print(
             f"Adaptive UI channel enabled at GET /aui (agent endpoint POST {aui_channel.path})",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    if mcp_channel is not None:
+        from mossy.channels.mcp.app import register_mcp_routes
+
+        register_mcp_routes(app, mcp_channel)
+        print(
+            f"MCP channel enabled at {mcp_channel.path} (tool: ask_mossy)",
             file=sys.stderr,
             flush=True,
         )

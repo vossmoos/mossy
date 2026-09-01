@@ -7,7 +7,7 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), and Slack (Socket Mode) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), Slack (Socket Mode), and MCP (`/mcp`, `ask_mossy` for Claude Desktop/Code) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
 - **Adaptive UI.** Skills can render interactive widget boxes next to the chat — cards, tables, progress, logs, documents — with zero frontend changes per skill. See below.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
@@ -29,6 +29,7 @@ A handful of small pieces, each doing one thing.
   - `web/app.py` — self-contained browser chat page (`GET /ui`) streaming from the AG-UI endpoint.
   - `aui/app.py` — adaptive UI (`GET /aui`): chat plus a skill-driven widget panel. See `mossy/channels/aui/README.md`.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
+  - `mcp/app.py` — MCP Streamable HTTP server (`/mcp`) exposing `ask_mossy` so Claude Desktop/Code can talk to Mossy like web chat. See `mossy/channels/mcp/README.md`.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
 That's the whole platform. Everything else is a skill.
@@ -76,11 +77,14 @@ python main.py --no-cli         # headless: HTTP only
 python main.py --no-slack       # disable the Slack channel
 python main.py --no-agui        # disable the AG-UI web chat endpoint
 python main.py --no-aui         # disable the adaptive UI channel
+python main.py --no-mcp         # disable the MCP endpoint (ask_mossy)
 python main.py --no-duties      # disable the duty sentinel loop
 python main.py --port 9000      # change HTTP port
 ```
 
 Slack starts automatically when both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are set in `.env`. Setup steps (creating the Slack app, scopes, tokens) live in `mossy/channels/slack/README.md`.
+
+Connect Claude (Desktop or Code) to the MCP channel while Mossy is running. Setup: `mossy/channels/mcp/README.md`.
 
 Submit work over HTTP:
 
