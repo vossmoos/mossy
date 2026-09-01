@@ -7,7 +7,8 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), Slack (Socket Mode), and MCP (`/mcp`, `ask_mossy` for Claude Desktop/Code) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), Slack (Socket Mode), and Mossy's own MCP server ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Own MCP server.** Mossy exposes Streamable HTTP MCP at `/mcp` with an `ask_mossy` tool, so Claude Desktop, Claude Code, and other MCP clients can talk to the same agent as web chat. See below.
 - **Adaptive UI.** Skills can render interactive widget boxes next to the chat — cards, tables, progress, logs, documents — with zero frontend changes per skill. See below.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
@@ -84,8 +85,6 @@ python main.py --port 9000      # change HTTP port
 
 Slack starts automatically when both `SLACK_BOT_TOKEN` and `SLACK_APP_TOKEN` are set in `.env`. Setup steps (creating the Slack app, scopes, tokens) live in `mossy/channels/slack/README.md`.
 
-Connect Claude (Desktop or Code) to the MCP channel while Mossy is running. Setup: `mossy/channels/mcp/README.md`.
-
 Submit work over HTTP:
 
 ```bash
@@ -93,6 +92,20 @@ curl -X POST http://127.0.0.1:8765/run \
   -H 'content-type: application/json' \
   -d '{"payload": "Summarize today's queue and tell me what's pending."}'
 ```
+
+---
+
+## MCP server (`/mcp`)
+
+Mossy runs its own [MCP](https://modelcontextprotocol.io/) server on the same HTTP process as `/ui` and `/run`. Connect Claude Desktop, Claude Code, or any MCP client and you get **`ask_mossy`**: a normal Mossy chat turn (same agent, skills, and queue as the web UI), not a separate process.
+
+With Mossy running at the default port:
+
+```bash
+claude mcp add mossy --transport http http://127.0.0.1:8765/mcp
+```
+
+If `MOSSY_API_KEY` is set, send it as `Authorization: Bearer <key>`. Disable the server with `--no-mcp`. Claude Desktop config and the rest of the setup: `mossy/channels/mcp/README.md`.
 
 ---
 
