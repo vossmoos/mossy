@@ -1,4 +1,4 @@
-"""Concurrent runtime plus optional HTTP, CLI, and Slack channels."""
+"""Concurrent runtime plus optional HTTP, CLI, Slack, and MCP channels."""
 
 from __future__ import annotations
 
@@ -19,9 +19,17 @@ from mossy.runtime import Runtime
 
 
 async def _http(
-    runtime: Runtime, host: str, port: int, *, enable_agui: bool, enable_aui: bool
+    runtime: Runtime,
+    host: str,
+    port: int,
+    *,
+    enable_agui: bool,
+    enable_aui: bool,
+    enable_mcp: bool,
 ) -> None:
-    app = create_app(runtime, enable_agui=enable_agui, enable_aui=enable_aui)
+    app = create_app(
+        runtime, enable_agui=enable_agui, enable_aui=enable_aui, enable_mcp=enable_mcp
+    )
     cfg = uvicorn.Config(app, host=host, port=port, loop="asyncio", log_level="warning")
     server = uvicorn.Server(cfg)
     await server.serve()
@@ -36,6 +44,7 @@ async def main() -> None:
     p.add_argument("--no-slack", action="store_true")
     p.add_argument("--no-agui", action="store_true")
     p.add_argument("--no-aui", action="store_true")
+    p.add_argument("--no-mcp", action="store_true")
     p.add_argument("--no-duties", action="store_true")
     args = p.parse_args()
 
@@ -50,6 +59,7 @@ async def main() -> None:
                 args.port,
                 enable_agui=not args.no_agui,
                 enable_aui=not args.no_aui,
+                enable_mcp=not args.no_mcp,
             )
         )
     if not args.no_cli:
