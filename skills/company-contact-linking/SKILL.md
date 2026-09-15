@@ -194,8 +194,8 @@ Steps 3 to 7 are skipped entirely when step 2 says the contact is already linked
 | `apply_link.py` | The single write path: re-derives the decision, then links (creating the company when needed), appends the German log line to the contact, tags the ticket, and reads it all back. |
 | `plan_company_check.py` | The pre-check: which tickets still need a company check, and why the others do not. Read-only. |
 
-The scripts folder is empty for now: this is the scaffold, and the open questions in
-`references/matching-rules.md` decide part of what `link_decision.py` and `match_company.py`
+All eight are in `scripts/`, beside the private helpers they share. The open questions in
+`references/matching-rules.md` still bear on what `link_decision.py` and `match_company.py`
 have to do.
 
 ## Being queued from a duty
