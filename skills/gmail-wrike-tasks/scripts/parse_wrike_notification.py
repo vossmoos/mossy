@@ -41,7 +41,9 @@ does not delete, it does not send, and it does not label.
 
 Configuration:
 
-    WRIKE_TASKS_ALLOWED_SENDERS   comma-separated, default "wrike@wrike.com"
+    WRIKE_TASKS_ALLOWED_SENDERS   comma-separated; this parser falls back to "wrike@wrike.com",
+                                  but the listing (fetch_wrike_notifications) has no default and
+                                  refuses to query the mailbox without it
 
 **This flow has its own sender allowlist, its own labels, and does not share the Freshdesk
 flow's.** Two senders arrive from Wrike and only one of them is work: ``wrike@wrike.com`` carries

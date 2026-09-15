@@ -10,7 +10,7 @@ TWO SWITCHES, BOTH OFF BY DEFAULT
 
 ``WRIKE_TASKS_ENABLED`` starts the duty. ``WRIKE_TASKS_WRITE_TO_JIRA`` lets it write, and stays off
 even with the first one on. Each must be the literal ``true``. **The write switch is the duty's, not
-the script's**, as in dlx: ``process_wrike_notification.py`` writes only when it is given
+the script's**: ``process_wrike_notification.py`` writes only when it is given
 ``--apply``, and this duty passes it only when the switch is on. In test mode a pass describes and
 writes nothing — not Jira, not the register, and not Gmail: no label, not even skipped, because
 labelling is writing too.
