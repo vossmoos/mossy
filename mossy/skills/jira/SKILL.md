@@ -37,6 +37,12 @@ Reads:
 
 Writes (only when the task explicitly asks):
 
+- `create_issue` — create a new issue in the configured project. Args: `summary`,
+  `description` (plain text, stored as ADF), `issue_type` (Jira type name, default `Task`),
+  and optional `assignee_query` (display name, email, or account id). The assignee is
+  best-effort: if the query does not resolve to exactly one assignable user, the issue is
+  still created **unassigned** and the result carries a `warnings` entry. Returns the new
+  issue key (e.g. `VI-123`) and its browse URL.
 - `add_comment` — plain-text comment on the issue.
 - `transition_issue` — change status via transition name, target status name,
   or transition id. Use `list_transitions` first when the target status is unclear.
