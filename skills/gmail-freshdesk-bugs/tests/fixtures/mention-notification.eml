@@ -6,14 +6,6 @@ X-Received: by 2002:a05:600c:4747:b0:499:dbba:9859 with SMTP id
  2026 00:17:48 -0700 (PDT)
 Return-Path:
  <bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com>
-Received: from mail-eu109.freshemail.io (mail-eu109.freshemail.io.
- [18.153.184.113])        by mx.google.com with ESMTPS id
- ffacd0b85a97d-48442d7ec60si2747122f8f.304.2026.09.01.00.17.48        for
- <agent@example.com>        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384
- bits=256/256);        Tue, 01 Sep 2026 00:17:48 -0700 (PDT)
-Received-SPF: pass (google.com: domain of
- bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
- designates 18.153.184.113 as permitted sender) client-ip=18.153.184.113;
 Return-Path:
  bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
 Date: Tue, 01 Sep 2026 07:17:47 +0000
@@ -28,16 +20,6 @@ X-FD-Ticket-Id: 101
 X-FD-Type: 31
 X-FD-Note-Id: 900000000001
 X-Auto-Response-Suppress: DR, RN, OOF, AutoReply
-X-Received: from ip-10-76-76-13.eu-central-1.compute.internal
- ([10.76.76.13])by mailserviceeuc-internal.freshworks.com (freshworks smtp-app
- server) with HTTPS ID 89bc04fb-31d0-4770-984a-083c20ce9955; Tue, 01 Sep 2026
- 07:17:47 +0000 (UTC)
-X-SDS-INFO: =?utf-8?q?VORfv3JMgliwww9mbhCpz4sYFKSbuYbRu2vm9yZqM7-Le1HU4QQohS?=
- =?utf-8?q?5c8WB1a9=5F6vZMXwpHjgTrKE8o61szuiZ=5FcUIXF60Hz6gscR2h7lwZK0mnFsUi?=
- =?utf-8?q?s2cd6yXLV9xUyR5JPzC7gj4IgmWz=5FJ8dHleqmxcTboB0an1Cz5TdQbrk?=
-Feedback-ID: appId_b_accId_fabejff:appId_b_accId_fabejff:appId_b:freshemail
-X-MESSAGEID: =?utf-8?q?YXHTfkZ5UTcL/8xdynx+/3RsQLhPlUlF3a/LPIJN3S7UQJghCZC62?=
- =?utf-8?q?mhmB5B72kTrXgJKSKjKBksh+mt9CRLuxmGhgF63tOzRyTpl9HUuJHU=3D?=
 Content-Type: text/html; charset="utf-8"
 Content-Transfer-Encoding: quoted-printable
 
