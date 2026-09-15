@@ -6,7 +6,8 @@ believed. So this holds it to the code in **both** directions:
 
 * every ``scripts/<name>.py`` it names exists, and every script in the folder is named;
 * every environment variable it names is read by the code, and every variable the code reads is
-  named — "the code" being the skill's scripts.
+  named — "the code" being the skill's scripts **and** ``duties/wrike_tasks.py``, whose two switches
+  an operator has to know.
 
 The variables the code reads are found by walking the source's syntax tree (``os.environ.get``,
 ``os.getenv``, ``os.environ[...]``), never by importing and never by a text search that a line break
@@ -25,6 +26,7 @@ from pathlib import Path
 _ROOT = Path(__file__).resolve().parents[1]
 _SKILL = _ROOT
 _SKILL_MD = _SKILL / "SKILL.md"
+_DUTY = _ROOT.parent.parent / "duties" / "wrike_tasks.py"
 
 _SCRIPT_RE = re.compile(r"scripts/([A-Za-z0-9_]+\.py)")
 #: A variable written as code: `UPPER_CASE_WITH_UNDERSCORES`.
@@ -63,7 +65,7 @@ def _env_reads(path: Path) -> set[str]:
 
 
 def _variables_the_code_reads() -> set[str]:
-    sources = sorted((_SKILL / "scripts").glob("*.py"))
+    sources = sorted((_SKILL / "scripts").glob("*.py")) + [_DUTY]
     return set().union(*(_env_reads(path) for path in sources))
 
 
@@ -86,9 +88,9 @@ class TestTheScriptsItNames:
 class TestTheVariablesItNames:
     def test_the_walk_finds_what_it_must(self):
         """Not a duplicate of the two below: an extractor that matches nothing passes them both.
-        Two variables, read by two different scripts."""
+        One variable from a script and one from the duty, each read in a different way."""
         reads = _variables_the_code_reads()
-        assert {"WRIKE_TOKEN", "WRIKE_TASK_LOCK_DIR"} <= reads, reads
+        assert {"WRIKE_TOKEN", "WRIKE_TASK_LOCK_DIR", "WRIKE_TASKS_WRITE_TO_JIRA"} <= reads, reads
 
     def test_every_variable_it_names_is_read_by_the_code(self):
         named = set(_VARIABLE_RE.findall(_text()))

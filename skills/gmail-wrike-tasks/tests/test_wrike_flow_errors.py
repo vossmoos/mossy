@@ -327,7 +327,7 @@ class TestNoLoggingIsWrittenDownAsADecision:
     def test_the_operator_alert_is_placed_where_it_belongs(self):
         doc = " ".join(creator_module.__doc__.split())
         assert "the process that reads Gmail" in doc
-        assert "No such process ships in this repository" in doc
+        assert "duties/wrike_tasks.py" in doc and "has never been started" in doc
         assert "does not exist yet" not in doc
 
     def test_the_other_writer_points_at_the_same_decision(self):

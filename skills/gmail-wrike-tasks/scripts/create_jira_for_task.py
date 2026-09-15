@@ -61,7 +61,7 @@ What **is** verified:
   on one real e-mail created one real issue.
 
 What is **not** verified: every other write. The copy onto an issue that exists, the repair branch
-and any unattended run with writing on have never run for real. There is nowhere to rehearse them — Jira
+and the duty with writing on have never run for real. There is nowhere to rehearse them — Jira
 does not allow deleting, so every attempt leaves a permanent issue in the client's real project,
 and Wrike is the client's, so no throwaway task may be created there either. So their first real run, like the create's, is against work that matters, by a
 person, one task at a time, which is the whole reason ``--apply`` exists and is passed by hand.
@@ -116,7 +116,7 @@ them would be that second shape.
 
 **A dry run calls the model too.** The proposal is built before ``apply`` is looked at, so a
 hand-run check shows the summary before writing is ever enabled — which is what it is for. The
-process that runs this unattended must not inherit it silently: in dry mode it labels nothing, sees the same
+duty that will run this must not inherit it silently: in dry mode it labels nothing, sees the same
 e-mails again, and would call the model per e-mail and per pass, indefinitely.
 
 Freshdesk's analyser is neither imported nor touched: skills do not import each other, and its
@@ -135,8 +135,8 @@ handler: WARNING and above reach stderr, and **an INFO is dropped**. That was me
 it, not read from the documentation.
 
 The alert to the operator — "the Jira token has expired, nothing is being created" — belongs to
-the process that reads Gmail and runs this module. No such process ships in this repository;
-whatever runs it has to turn each ``reason`` into a log line:
+the process that reads Gmail and runs this module. That process is the duty,
+``duties/wrike_tasks.py``, and it has never been started. It turns each ``reason`` into a log line:
 a WARNING when a person should look, which reaches stderr, and an INFO otherwise, which by the
 paragraph above is dropped. Nothing sends a message anybody receives. Log lines added here too
 would be more text nobody reads, and would look as though the problem had been handled.

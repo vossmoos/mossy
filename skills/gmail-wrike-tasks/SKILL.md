@@ -3,7 +3,7 @@ name: gmail-wrike-tasks
 description: >-
   Wrike task notifications in Gmail turned into Jira — a task with no issue gets one with
   a model-evaluated summary, and a task that has one gets its new comments copied onto it. This is
-  the documentation of the skill and the guide for running one notification by hand. Use it to list or describe a notification, and write only when the
+  the documentation of the skill and the guide for running one notification by hand; the duty runs the flow in Python by itself. Use it to list or describe a notification, and write only when the
   operator asks for that e-mail.
 ---
 
@@ -11,10 +11,9 @@ description: >-
 
 ## Read this first — this file does not run the flow
 
-Whatever runs the flow — a person in a shell, or a duty a repository adds — calls the scripts
-directly, in Python, one subprocess per e-mail, and **enqueues no goal for an agent**: a skill does
-not bound an agent that has other doors, and this Jira cannot delete what it creates. This
-repository ships no such duty.
+`duties/wrike_tasks.py` runs the flow. It calls the scripts directly, in Python, one subprocess per
+e-mail, and **enqueues no goal for an agent**: a skill does not bound an agent that has other doors,
+and this Jira cannot delete what it creates. The duty never reads this file.
 
 So this file is two things, and only two:
 
@@ -33,6 +32,9 @@ nine are modules that `process_wrike_notification` loads by path; run on their o
 
 - **Nothing is written without `--apply`** — not in Jira, not in the local register, not a Gmail
   label. Without it the Jira write clients are not even built.
+- **The duty's switch is the duty's.** `WRIKE_TASKS_WRITE_TO_JIRA` is read by the duty, which passes
+  `--apply` only when it is `true`. No script reads it: setting it changes nothing for a run by hand,
+  and a run by hand with `--apply` writes whatever the switch says.
 - **Nothing written to Jira can be deleted.** This account has no delete permission; a surplus
   issue is renamed, never removed.
 - `--apply` labels the e-mail itself, last. Do not also run `mark-processed` or `mark-skipped` after
@@ -87,7 +89,7 @@ Each script prints one JSON object. What travels between the steps is the Gmail 
    | `skip`, with `reason` `not_a_wrike_notification` or `not_responsible` | Not a Wrike task notification, or a task with no issue that does not concern me. Labelled skipped. | Nothing. |
    | `write_stopped` | A Jira-side step stopped; `write_reason` says which. The e-mail stays unlabelled and comes back. | Read `write_reason`. After `read_back_failed` the issue exists and the next run finds it by its label. |
    | `write_stopped` with `summarised_comments_not_recorded` | The issue exists; the comments it summarised could not be recorded. | **Do not run it again before a person looks**: the next run would post those comments as duplicates. |
-   | `label_failed` | Jira is done; the label did not land. The label's own `reason` is under `label`. | The next run finds the issue and labels it — unless the label does not exist in Gmail (`label_not_found`): a person creates it; until then every run stops at that label. |
+   | `label_failed` | Jira is done; the label did not land. The label's own `reason` is under `label`. | The next run finds the issue and labels it — unless the label does not exist in Gmail (`label_not_found`): a person creates it, and until then the duty stops the pass. |
    | `me_unresolved`, `responsibility_unknown`, `wrike_unreadable` | Stopped before any write: who I am, or the task, could not be read. | The Wrike token or the licence. |
    | `plan_stopped` | The decision leads to no write — for example two issues carry the task's label. | Read `plan`; a person decides. |
 
@@ -143,14 +145,14 @@ All of them are self-contained: no `import mossy`, no `python-dotenv`.
 
 ## Configuration
 
-Every variable the scripts read, and no other. A test holds this table to the code in both
-directions.
+Every variable the code reads — the scripts and the duty — and no other. A test holds this table to
+the code in both directions.
 
-**How the variables reach a script.** No script loads `.env`. A subprocess started under Mossy inherits
-Mossy's environment, where the repository's `.env` overrides the shell. Run by hand, a script
+**How the variables reach a script.** No script loads `.env`. Under Mossy, the duty's subprocesses
+inherit Mossy's environment, where the repository's `.env` overrides the shell. Run by hand, a script
 sees only the shell it was started from, so export what it needs there first. That includes
 `WRIKE_TOKEN`: if it lives only in the operator's shell, Mossy has to be started from that shell for
-anything it starts to read Wrike.
+the duty to read Wrike.
 
 | Variable | Read by | Meaning |
 |---|---|---|
@@ -166,6 +168,10 @@ anything it starts to read Wrike.
 | `JIRA_SPACE_NAME` | jira_label_search, create_jira_for_task | The project issues are created in and searched. |
 | `WRIKE_JIRA_LINKS_DB` | wrike_jira_links | The register, default `~/.local/share/mossy/wrike-jira-links.duckdb`. |
 | `WRIKE_TASK_LOCK_DIR` | task_lock | Default `~/.local/share/mossy/task-locks`. |
+| `WRIKE_TASKS_ENABLED` | the duty | Starts the duty. Only the literal `true`. |
+| `WRIKE_TASKS_WRITE_TO_JIRA` | the duty | Lets the duty pass `--apply`. Only the literal `true`, and off even with the duty on. |
+| `WRIKE_TASKS_INTERVAL_MINUTES` | the duty | Minutes between passes, default `5`. |
+| `WRIKE_TASKS_MAX_EMAILS` | the duty | E-mails run per pass, default `5`. |
 
 ## Before switching it on — the limits that change what you will see
 
@@ -179,6 +185,8 @@ reading this repository's core and the skills library — nothing was run:
   one script. An agent that asks for `process_wrike_notification.py` with `message-id` and
   `apply: true` gets exactly `--message-id <id> --apply` — measured on its executor — run with
   Mossy's own environment, credentials included.
+- **`WRIKE_TASKS_WRITE_TO_JIRA` does not protect it.** No script reads it; it only decides what the
+  duty passes.
 
 So "an agent writes only when the operator asks" is an instruction, not a lock: a skill does not
 bound an agent that has other doors. Until there is a lock, one agent's decision on any channel, with the credentials
@@ -189,8 +197,9 @@ flow for good.
    Testing, and changing that is not this repository's to do. A dead token is `gmail_token_refused`
    in the log — never an empty mailbox — and nothing is processed until it is renewed.
 2. **The write path has run once for real — the create, and nothing else.** One `--apply` by hand on
-   one e-mail created one issue. Copying comments onto an issue that exists and the repair branch
-   have never run for real: run each by hand, on one e-mail, before anything runs this unattended.
+   one e-mail created one issue. Copying comments onto an issue that exists, the repair branch
+   and the duty with writing on have never run for real: run each by hand, on one e-mail, before
+   the duty's write switch goes on.
    (The create's shape was proven before that with curl, on a test issue that stays in the project
    because it cannot be deleted.)
 3. **The task id rests on one header, measured on one message.** One real notification
