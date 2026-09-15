@@ -446,7 +446,7 @@ def jira_capability() -> Toolset | None:
         (Task, Bug, Story, …). `assignee_query` (display name, email, or account id) is
         best-effort: if it does not resolve to exactly one assignable user the issue is still
         created, unassigned, and the result carries a `warnings` entry. Returns the new issue
-        key (e.g. VI-123) and its browse URL."""
+        key (e.g. VM-190) and its browse URL."""
         return client.create_issue(
             summary, description, issue_type=issue_type, assignee_query=assignee_query
         )
