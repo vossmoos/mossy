@@ -1,0 +1,73 @@
+Delivered-To: agent@example.com
+Received: by 2002:a05:7412:29a9:b0:1e7:525b:1a5d with SMTP id
+ s41csp4212448rda;        Tue, 1 Sep 2026 00:39:47 -0700 (PDT)
+X-Received: by 2002:a05:6000:4305:b0:484:3647:d977 with SMTP id
+ ffacd0b85a97d-484410431f7mr10183763f8f.27.1788248387286;        Tue, 01 Sep
+ 2026 00:39:47 -0700 (PDT)
+Return-Path:
+ <bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com>
+Received: from mail-eu108.freshemail.io (mail-eu108.freshemail.io.
+ [18.153.184.112])        by mx.google.com with ESMTPS id
+ ffacd0b85a97d-48442d37295si2999083f8f.81.2026.09.01.00.39.47        for
+ <agent@example.com>        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384
+ bits=256/256);        Tue, 01 Sep 2026 00:39:47 -0700 (PDT)
+Received-SPF: pass (google.com: domain of
+ bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
+ designates 18.153.184.112 as permitted sender) client-ip=18.153.184.112;
+Return-Path:
+ bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
+Date: Tue, 01 Sep 2026 07:39:46 +0000
+From: Example Support <support@example.freshdesk.com>
+To: agent@example.com
+Message-ID: <cf52effb-fab4-497e-b1c6-752864643405.1000000.101.2.900000000002@thread-notification.freshdesk.com>
+Subject: New reply in 101 - Test mention EX-135
+MIME-Version: 1.0
+Auto-Submitted: auto-generated
+X-FD-Account-Id: 1000000
+X-FD-Ticket-Id: 101
+X-FD-Type: 30
+X-FD-Note-Id: 900000000002
+X-Auto-Response-Suppress: DR, RN, OOF, AutoReply
+X-Received: from ip-10-76-68-13.eu-central-1.compute.internal
+ ([10.76.68.13])by mailserviceeuc-internal.freshworks.com (freshworks smtp-app
+ server) with HTTPS ID 562476a5-7760-4984-89b4-8243ac89c2c9; Tue, 01 Sep 2026
+ 07:39:46 +0000 (UTC)
+X-SDS-INFO: =?utf-8?q?VORfv3JMgliwww9mbhCpz9NBg7o3mgoH6BYfb0vgb4=5FW5OSMlvbl?=
+ =?utf-8?q?Cer37bnn7hKmVpr2Newy9LcEdZ274=5F3M6RcjVO4xcSJC4kdF142dRiyWo1EHDFn?=
+ =?utf-8?q?RX00QyOjAJb9bR5JPzC7gj4IgmWz=5FJ8dHleqmxcTboB0an1Cz5TdQbrk?=
+Feedback-ID: appId_b_accId_fabejff:appId_b_accId_fabejff:appId_b:freshemail
+X-MESSAGEID: =?utf-8?q?YXHTfkZ5UTcL/8xdynx+/3RsQLhPlUlF3a/LPIJN3S6zCyAhj27lv?=
+ =?utf-8?q?TkbSjevLLSAQUUbLukl6Nj6d09bRlVwl+LQL937mEv/EOhx5yLWlpo=3D?=
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div style=3D"border: 1px solid #F5F7F9; color: #475867;background-color: #F5=
+F7F9;"><div style=3D"padding: 24px 24px 0 24px; font-size: 16px; background-c=
+olor: #F5F7F9; color: #475867; font-weight: 400;"><h4 style=3D"color:#12344d;=
+ display: inline; font-weight: 700">Hi </h4><p style=3D"line-height: 24px;">T=
+here is a new reply on your <a style=3D"color: #2C5CC5;" href=3D"https://exam=
+ple.freshdesk.com/a/tickets/101?thread=3D2&follow=3Demail">thread</a>.</p></d=
+iv><div style=3D"padding: 24px; background: #FFFFFF; color: #3F4551;margin: 1=
+6px;border-radius: 8px"><strong style=3D"font-size: 16px;font-weight: 700">Su=
+bject : Test mention EX-135</strong><div style=3D"font-size: 14px;margin-top:=
+10px"><p style=3D"padding: 2px 8px 2px 8px;border-radius: 4px;border: 1px sol=
+id #FDDBB5;background: #FEF1E1;width: fit-content;color: #C13E1B;font-size: 1=
+2px;font-weight:600">Thread message</p><p></p><div style=3D"font-family:-appl=
+e-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-s=
+erif; font-size:14px">
+<div>Third mention, replying inside the existing thread</div>
+<div><br></div>
+</div><p></p><p></p></div><div><hr style=3D"color: #EBEFF3; opacity: 0.2;"><d=
+iv style=3D"padding-top: 24px; font-weight: 600;"><a style=3D"color: #FFFFFF;=
+ background: #000000; width: fit-content; height: hug(37px); padding: 10px 12=
+px 10px 10px; border-radius: 5px; text-decoration: none; display: inline-bloc=
+k;" href=3D"https://example.freshdesk.com/a/tickets/101?thread=3D2&follow=3De=
+mail">View thread and reply in Freshdesk</a></div><div style=3D"font-size:12p=
+x; margin-top:8px;"><em>If the button doesn't work, copy-paste this URL in yo=
+ur browser's address bar: </em><a style=3D"color: #2C5CC5;" href=3D"https://e=
+xample.freshdesk.com/a/tickets/101?thread=3D2&follow=3Demail"><a href=3D'http=
+s://example.freshdesk.com/a/tickets/101?thread=3D2&follow=3Demail'>https://ex=
+ample.freshdesk.com/a/tickets/101?thread=3D2&follow=3Demail</a></a></div></di=
+v></div></div><span title=3D"fd_tkt_identifier" style=3D'font-size:0px; font-=
+family:"fdtktid"; min-height:0px; height:0px; opacity:0; max-height:0px; line=
+-height:0px; color:#ffffff'>101:1000000</span>

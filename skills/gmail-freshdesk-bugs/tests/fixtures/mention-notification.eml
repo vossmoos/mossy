@@ -1,0 +1,73 @@
+Delivered-To: agent@example.com
+Received: by 2002:a05:7412:29a9:b0:1e7:525b:1a5d with SMTP id
+ s41csp4194539rda;        Tue, 1 Sep 2026 00:17:48 -0700 (PDT)
+X-Received: by 2002:a05:600c:4747:b0:499:dbba:9859 with SMTP id
+ 5b1f17b1804b1-49cdc57bf3emr91521995e9.5.1788247068721;        Tue, 01 Sep
+ 2026 00:17:48 -0700 (PDT)
+Return-Path:
+ <bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com>
+Received: from mail-eu109.freshemail.io (mail-eu109.freshemail.io.
+ [18.153.184.113])        by mx.google.com with ESMTPS id
+ ffacd0b85a97d-48442d7ec60si2747122f8f.304.2026.09.01.00.17.48        for
+ <agent@example.com>        (version=TLS1_3 cipher=TLS_AES_256_GCM_SHA384
+ bits=256/256);        Tue, 01 Sep 2026 00:17:48 -0700 (PDT)
+Received-SPF: pass (google.com: domain of
+ bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
+ designates 18.153.184.113 as permitted sender) client-ip=18.153.184.113;
+Return-Path:
+ bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
+Date: Tue, 01 Sep 2026 07:17:47 +0000
+From: Example Support <support@example.freshdesk.com>
+To: agent@example.com
+Message-ID: <db33c87a-6b36-4ff4-958b-23427e735683.1000000.101.1.900000000001@thread-notification.freshdesk.com>
+Subject: Mentioned in private in 101 - Test mention EX-135
+MIME-Version: 1.0
+Auto-Submitted: auto-generated
+X-FD-Account-Id: 1000000
+X-FD-Ticket-Id: 101
+X-FD-Type: 31
+X-FD-Note-Id: 900000000001
+X-Auto-Response-Suppress: DR, RN, OOF, AutoReply
+X-Received: from ip-10-76-76-13.eu-central-1.compute.internal
+ ([10.76.76.13])by mailserviceeuc-internal.freshworks.com (freshworks smtp-app
+ server) with HTTPS ID 89bc04fb-31d0-4770-984a-083c20ce9955; Tue, 01 Sep 2026
+ 07:17:47 +0000 (UTC)
+X-SDS-INFO: =?utf-8?q?VORfv3JMgliwww9mbhCpz4sYFKSbuYbRu2vm9yZqM7-Le1HU4QQohS?=
+ =?utf-8?q?5c8WB1a9=5F6vZMXwpHjgTrKE8o61szuiZ=5FcUIXF60Hz6gscR2h7lwZK0mnFsUi?=
+ =?utf-8?q?s2cd6yXLV9xUyR5JPzC7gj4IgmWz=5FJ8dHleqmxcTboB0an1Cz5TdQbrk?=
+Feedback-ID: appId_b_accId_fabejff:appId_b_accId_fabejff:appId_b:freshemail
+X-MESSAGEID: =?utf-8?q?YXHTfkZ5UTcL/8xdynx+/3RsQLhPlUlF3a/LPIJN3S7UQJghCZC62?=
+ =?utf-8?q?mhmB5B72kTrXgJKSKjKBksh+mt9CRLuxmGhgF63tOzRyTpl9HUuJHU=3D?=
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div style=3D"border: 1px solid #F5F7F9; color: #475867;background-color: #F5=
+F7F9;"><div style=3D"padding: 24px 24px 0 24px; font-size: 16px; background-c=
+olor: #F5F7F9; color: #475867; font-weight: 400;"><h4 style=3D"color:#12344d;=
+ display: inline; font-weight: 700">Hi </h4><p style=3D"line-height: 24px;">T=
+est Reporter tagged you in a <a style=3D"color: #2C5CC5;" href=3D"https://exa=
+mple.freshdesk.com/a/tickets/101?thread=3D1&follow=3Demail">thread</a> and wa=
+nts you to have a look.</p></div><div style=3D"padding: 24px; background: #FF=
+FFFF; color: #3F4551;margin: 16px;border-radius: 8px"><strong style=3D"font-s=
+ize: 16px;font-weight: 700">Subject : Test mention EX-135</strong><div style=
+=3D"font-size: 14px;margin-top:10px"><p style=3D"padding: 2px 8px 2px 8px;bor=
+der-radius: 4px;border: 1px solid #FDDBB5;background: #FEF1E1;width: fit-cont=
+ent;color: #C13E1B;font-size: 12px;font-weight:600">Thread message</p><p></p>=
+<div style=3D"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto=
+, Helvetica Neue, Arial, sans-serif; font-size:14px"><div>
+<span class=3D"inserted-agents fr-deletable fr-tribute" id=3D"inserted-agents=
+-id-1">Test Agent</span> can you check the triage quality here?</div></div><p=
+></p><p></p></div><div><hr style=3D"color: #EBEFF3; opacity: 0.2;"><div style=
+=3D"padding-top: 24px; font-weight: 600;"><a style=3D"color: #FFFFFF; backgro=
+und: #000000; width: fit-content; height: hug(37px); padding: 10px 12px 10px =
+10px; border-radius: 5px; text-decoration: none; display: inline-block;" href=
+=3D"https://example.freshdesk.com/a/tickets/101?thread=3D1&follow=3Demail">Vi=
+ew thread and reply in Freshdesk</a></div><div style=3D"font-size:12px; margi=
+n-top:8px;"><em>If the button doesn't work, copy-paste this URL in your brows=
+er's address bar: </em><a style=3D"color: #2C5CC5;" href=3D"https://example.f=
+reshdesk.com/a/tickets/101?thread=3D1&follow=3Demail"><a href=3D'https://exam=
+ple.freshdesk.com/a/tickets/101?thread=3D1&follow=3Demail'>https://example.fr=
+eshdesk.com/a/tickets/101?thread=3D1&follow=3Demail</a></a></div></div></div>=
+</div><span title=3D"fd_tkt_identifier" style=3D'font-size:0px; font-family:"=
+fdtktid"; min-height:0px; height:0px; opacity:0; max-height:0px; line-height:=
+0px; color:#ffffff'>101:1000000</span>
