@@ -23,6 +23,7 @@ from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.shell import shell_capability
 from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
+from mossy.capabilities.wrike import wrike_capability
 from mossy.duties.base import EnqueueRequest
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
@@ -116,6 +117,16 @@ class Runtime:
             jira = jira_capability()
             if jira is not None:
                 capabilities.append(jira)
+        if self._allows_skill_tools(
+            "wrike",
+            allow_skills=allow_skills,
+            exclude_skills=exclude_skills,
+        ):
+            # Read only — which describes this capability, not what the agent can do with Wrike:
+            # the shell tool reaches it too. See mossy/capabilities/wrike.py.
+            wrike = wrike_capability()
+            if wrike is not None:
+                capabilities.append(wrike)
         if self._allows_skill_tools(
             "github",
             allow_skills=allow_skills,
