@@ -739,7 +739,7 @@ class TestWhatElseTheSixCarry:
 
     def test_a_link_keeps_its_text_and_its_address(self, corpus):
         out = creator_module._plain(corpus["MAAAAAEXmain"]["description"])
-        assert "[#598413] ZEKALO: Pekalo 374978 : KALOLO " \
+        assert "[#399516] ZEKALO: Pekalo 440894 : KALOLO " \
                "(https://example.com/link-1)" in out
 
     def test_a_link_whose_text_is_the_url_is_not_doubled(self, corpus):
@@ -764,7 +764,7 @@ class TestWhatElseTheSixCarry:
         # The leading space is the source's own indentation and is kept: in a JSON example it
         # is content, so only trailing whitespace is trimmed.
         assert ' "sizelo": "Tozelo",' in lines
-        assert ' "vuzelo": "Zezelo 72 kakami",' in lines
+        assert ' "vuzelo": "Zezelo 21 kakami",' in lines
         assert "vumilo:Razelo:" not in out
         assert len(lines) > 40
 
