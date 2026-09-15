@@ -11,8 +11,7 @@ Use this skill when the user asks what a Wrike task says — its title, descript
 what has been said on it in its comments.
 
 This is the generic capability skill. Which tasks matter and what to do with them belong in
-separate external skills that build on these tools; the Wrike → Jira flow is one of them
-(`skills/gmail-wrike-tasks`), and it carries its own client.
+separate skills that build on these tools.
 
 ## Configuration
 
@@ -35,15 +34,13 @@ never "there is none".
 ## "Read only" describes these tools — not what an agent can do with Wrike
 
 Anyone reading it as a guarantee is wrong. `shell` — `run_command`, bash with no restriction — is
-available on every channel, so if `WRIKE_TOKEN` is in Mossy's environment an agent can already
-`curl -X POST` to Wrike today, with or without these tools. This is the lesson of VI-110: a skill
-does not bound an agent that has other doors.
+available on every channel that takes the shared capabilities, so if `WRIKE_TOKEN` is in Mossy's
+environment an agent can already `curl -X POST` to Wrike, with or without these tools. A skill
+does not bound an agent that has another way to reach the same service.
 
 ## Personal data — declared, not fixed
 
-Task descriptions and comments carry the end customer's personal data: name, street, mobile,
-e-mail. Reading them puts that data in the conversation, and the `jira` tools can write it into an
-issue that cannot be deleted (`create_issue`, `add_comment`). The Wrike → Jira flow stopped copying
-task descriptions into issues for exactly that reason; here, nothing stops it except the agent.
-Do not copy a task's description or comments into Jira or anywhere else unless the task explicitly
-asks for it.
+Task descriptions and comments can carry an end customer's personal data: name, street, mobile,
+e-mail. Reading them puts that data in the conversation, and the `jira` tools can write it into a
+Jira issue (`create_issue`, `add_comment`). Nothing here stops that except the agent. Do not copy
+a task's description or comments into Jira or anywhere else unless the task explicitly asks for it.

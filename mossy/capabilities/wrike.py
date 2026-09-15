@@ -1,44 +1,33 @@
-"""Wrike exposed as a Pydantic AI capability — READ ONLY (VI-194, piece 6).
+"""Wrike exposed as a Pydantic AI capability — READ ONLY.
 
 Two operations, and nothing else: one task by its API id, and that task's comments.
 
-PORTED FROM THE SKILL, NOT IMPORTED
-
-``skills/gmail-wrike-tasks/scripts/wrike_api.py`` carries the same client. The core cannot import
-it: a skill can be removed or transferred on its own, and the core would then fail to import — the
-rule of VI-121, seen from the other side. So the client is copied here, and only the two reads this
-capability exposes; ``get_me`` stays in the skill, the only thing that needs it.
-
-That makes two Wrike clients, as there are already two for Gmail and two for Jira.
-``tests/test_wrike_capability.py`` runs both against the same fake Wrike and requires the same
-answer, so they cannot drift apart without a test turning red. Nothing does that for Gmail or Jira.
-
-Read-only structurally, as in the skill: ``_get`` is the only transport and it has **no ``method``
-parameter**, so adding a write means adding a function, not passing an argument.
+Read-only structurally: ``_get`` is the only transport and it has **no ``method`` parameter**, so
+adding a write means adding a function, not passing an argument.
 
 ★ "READ ONLY" DESCRIBES THIS CAPABILITY, NOT WHAT THE AGENT CAN DO WITH WRIKE.
 
 Anyone reading it as a guarantee is wrong. ``shell_capability`` — ``run_command``, bash with no
-restriction — is registered on every channel. If ``WRIKE_TOKEN`` is in Mossy's environment, the
-agent can ``curl -X POST`` to Wrike TODAY, before this capability existed and regardless of it.
-That is the lesson of VI-110: a skill does not bound an agent that has other doors.
+restriction — is registered on every channel that takes the shared capabilities (CLI, Slack,
+AG-UI, MCP and the queue worker). If ``WRIKE_TOKEN`` is in Mossy's environment, the agent can
+``curl -X POST`` to Wrike regardless of this capability: a skill does not bound an agent that has
+another way to reach the same service.
 
 ★ PERSONAL DATA — DECLARED, NOT FIXED.
 
-These reads put task descriptions and comments into the model's context, and they carry the end
+These reads put task descriptions and comments into the model's context, and they can carry an end
 customer's personal data: name, street, mobile, e-mail. The agent can then write that text into
-Jira with ``create_issue`` (or ``add_comment``), which the Jira capability exposes. It is the same
-path the Wrike → Jira flow closed on 14 September 2026 by taking the original description out of
-the issue (``create_jira_for_task``); here nothing closes it but the agent's own judgement.
+Jira with ``create_issue`` (or ``add_comment``), which the Jira capability exposes. Nothing in this
+module stops that; only the agent's own judgement does.
 
-Measured facts carried over from the skill, so nobody re-derives them: the API takes the task's API
-id (``MAAAAAEXAMPLE``), not the permalink number (a 400); ``description`` comes by default; comments
+Measured against the Wrike API, so nobody re-derives it: the API takes the task's API id
+(``MAAAAAEXAMPLE``), not the permalink number (a 400); ``description`` comes by default; comments
 come from the ``/tasks/{id}/comments`` sub-resource; and a Collaborator licence serves a restricted
 read as 200 with an empty list — the same bytes as "nothing there" (``EMPTY_IS_NOT_ABSENCE``).
 
 Environment:
 
-    WRIKE_TOKEN   Wrike permanent access token — the same variable the skill reads.
+    WRIKE_TOKEN   Wrike permanent access token.
 """
 
 from __future__ import annotations
@@ -55,11 +44,11 @@ from pydantic_ai.toolsets import FunctionToolset
 
 API_BASE = "https://www.wrike.com/api/v4"
 
-#: The two paths, and the only two — the skill's, which the parity test holds this module to.
+#: The two paths, and the only two.
 TASK_PATH = "/tasks/{task_id}"
 TASK_COMMENTS_PATH = "/tasks/{task_id}/comments"
 
-#: Said once, and attached to every empty result — word for word the skill's sentence.
+#: Said once, and attached to every empty result.
 EMPTY_IS_NOT_ABSENCE = (
     "Wrike answered 200 with an empty list. On a Collaborator licence a restricted read looks "
     "exactly like this, so an empty answer is not evidence that nothing is there."
@@ -99,7 +88,7 @@ class WrikeClient:
     @classmethod
     def from_env(cls) -> WrikeClient | None:
         """``WRIKE_TOKEN`` or ``None``. Never raises, and never makes a request — as
-        ``JiraClient.from_env`` and ``GmailClient.from_env``."""
+        ``JiraClient.from_env``."""
         token = (os.environ.get("WRIKE_TOKEN") or "").strip()
         if not token:
             return None
