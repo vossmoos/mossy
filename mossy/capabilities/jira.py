@@ -250,22 +250,75 @@ class JiraClient:
             "created": data.get("created"),
         }
 
-    def _resolve_assignee(self, task_id: str, assignee: str) -> str:
-        value = assignee.strip()
+    def create_issue(
+        self,
+        summary: str,
+        description: str = "",
+        issue_type: str = "Task",
+        assignee_query: str | None = None,
+    ) -> dict[str, Any]:
+        """Create an issue in the configured project (`JIRA_SPACE_NAME`).
+
+        `description` is converted to ADF with the same `_adf_text` helper `add_comment` uses.
+        Assignee is **best-effort**: when `assignee_query` does not resolve to exactly one
+        assignable user, the issue is still created — unassigned — and a warning is returned.
+        Creating unassigned beats not creating. Returns the new issue key and its browse URL.
+        """
+        title = (summary or "").strip()
+        if not title:
+            raise ValueError("summary must not be empty.")
+        fields: dict[str, Any] = {
+            "project": {"key": self.space_name.upper()},
+            "summary": title,
+            "issuetype": {"name": (issue_type or "Task").strip() or "Task"},
+        }
+        body_text = (description or "").strip()
+        if body_text:
+            fields["description"] = _adf_text(body_text)
+
+        warnings: list[str] = []
+        if assignee_query and assignee_query.strip():
+            account_id, warning = self._match_assignee(assignee_query)
+            if account_id is not None:
+                fields["assignee"] = {"accountId": account_id}
+            elif warning:
+                warnings.append(f"created without assignee — {warning}")
+
+        status, data = self.request_json("POST", "/issue", body={"fields": fields})
+        if status not in (200, 201) or not isinstance(data, dict):
+            raise JiraError("Jira issue creation failed.", status=status, body=data)
+        key = data.get("key")
+        result: dict[str, Any] = {
+            "issue_key": key,
+            "id": data.get("id"),
+            "url": f"https://{self.site.rstrip('/')}/browse/{key}" if key else None,
+        }
+        if warnings:
+            result["warnings"] = warnings
+        return result
+
+    def _match_assignee(self, query: str) -> tuple[str | None, str | None]:
+        """Resolve an assignee query to a single accountId via /user/assignable/search.
+
+        Returns ``(account_id, warning)``. ``account_id`` is None when the query does not
+        resolve to exactly one assignable user; ``warning`` then says why. Never raises for an
+        empty, not-found or ambiguous query — the caller decides whether that is fatal
+        (``assign_issue`` raises; ``create_issue`` creates unassigned).
+        """
+        value = query.strip()
         if not value:
-            raise ValueError("assignee must not be empty.")
-        if re.fullmatch(r"\d+:\S+", value):
-            return value
-        key = self.issue_key(task_id)
+            return None, "assignee query was empty"
+        if re.fullmatch(r"\d+:\S+", value):  # already an Atlassian accountId
+            return value, None
         status, data = self.request_json(
             "GET",
             "/user/assignable/search",
             query={"project": self.space_name, "query": value, "maxResults": "20"},
         )
         if status != 200 or not isinstance(data, list):
-            raise JiraError("Jira assignable user search failed.", status=status, body=data)
+            return None, f"assignable user search failed (HTTP {status})"
         if not data:
-            raise JiraError(f"No assignable user matching {assignee!r} on project {self.space_name}.")
+            return None, f"no assignable user matching {query!r} in project {self.space_name}"
         lowered = value.casefold()
         for user in data:
             if not isinstance(user, dict):
@@ -276,19 +329,25 @@ class JiraClient:
             display = str(user.get("displayName") or "").casefold()
             email = str(user.get("emailAddress") or "").casefold()
             if display == lowered or email == lowered:
-                return account_id
+                return account_id, None
         if len(data) == 1 and isinstance(data[0], dict):
             account_id = data[0].get("accountId")
             if isinstance(account_id, str):
-                return account_id
+                return account_id, None
         options = ", ".join(
             str(u.get("displayName"))
             for u in data
             if isinstance(u, dict) and u.get("displayName")
         )
-        raise JiraError(
-            f"Assignee {assignee!r} is ambiguous on {key}. Matches: {options or 'none'}."
-        )
+        return None, f"assignee {query!r} is ambiguous ({len(data)} matches: {options or 'none'})"
+
+    def _resolve_assignee(self, task_id: str, assignee: str) -> str:
+        """Strict resolution for ``assign_issue``: exactly one user, or raise."""
+        key = self.issue_key(task_id)
+        account_id, warning = self._match_assignee(assignee)
+        if account_id is None:
+            raise JiraError(f"Cannot assign {assignee!r} on {key}: {warning}.")
+        return account_id
 
     def request_json(
         self,
@@ -377,6 +436,21 @@ def jira_capability() -> Toolset | None:
         """Read one issue in the configured Jira project by numeric id or full key."""
         return client.get_issue(task_id)
 
+    async def create_issue(
+        summary: str,
+        description: str = "",
+        issue_type: str = "Task",
+        assignee_query: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new issue in the configured project. `issue_type` is a Jira type name
+        (Task, Bug, Story, …). `assignee_query` (display name, email, or account id) is
+        best-effort: if it does not resolve to exactly one assignable user the issue is still
+        created, unassigned, and the result carries a `warnings` entry. Returns the new issue
+        key (e.g. VM-190) and its browse URL."""
+        return client.create_issue(
+            summary, description, issue_type=issue_type, assignee_query=assignee_query
+        )
+
     async def add_comment(task_id: str, comment: str) -> dict[str, Any]:
         """Add a plain-text comment to an issue."""
         return client.add_comment(task_id, comment)
@@ -401,6 +475,7 @@ def jira_capability() -> Toolset | None:
         FunctionToolset(
             [
                 get_issue,
+                create_issue,
                 add_comment,
                 list_transitions,
                 transition_issue,
@@ -411,9 +486,9 @@ def jira_capability() -> Toolset | None:
             instructions=(
                 "These tools implement the `jira` skill: raw Jira Cloud API access for the "
                 f"configured project ({client.space_name} on {client.site}). Use get_issue and "
-                "list_transitions to gather context. Use add_comment, transition_issue, "
-                "assign_issue, and log_work only when a task explicitly calls for them. "
-                "task_id may be a bare number (190) or a full key (VM-190)."
+                "list_transitions to gather context. Use create_issue, add_comment, "
+                "transition_issue, assign_issue, and log_work only when a task explicitly calls "
+                "for them. task_id may be a bare number (190) or a full key (VM-190)."
             ),
         )
     )

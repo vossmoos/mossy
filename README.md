@@ -284,3 +284,21 @@ class Ping(Duty):
 ```
 
 The goal text should match a skill description so the worker selects that skill.
+
+---
+
+## Added capabilities, skills and duties
+
+Everything below does nothing until its variables are set. The skills are always discovered and have no on/off switch: their scripts run only when an agent or a person calls them, and refuse to run without configuration.
+
+| Kind | Name | What turns it on |
+|---|---|---|
+| Capability | `jira` — gains `create_issue` | `JIRA_SITE`, `JIRA_USER_EMAIL`, `JIRA_API_KEY`, `JIRA_SPACE_NAME` |
+| Capability | `wrike` — read-only: `get_task`, `get_task_comments` | `WRIKE_TOKEN` |
+| Skill | `skills/company-contact-linking/` | needs `FRESHDESK_DOMAIN`, `FRESHDESK_API_KEY`, `LINKING_ENABLED=true`, `LINKING_GROUP_IDS`, `LINKING_CONTACT_LOG_FIELD`; does nothing without them |
+| Skill | `skills/gmail-freshdesk-bugs/` | needs `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_ALLOWED_SENDERS`, plus the Freshdesk, Jira and `OPENAI_API_KEY` variables; does nothing without them |
+| Skill | `skills/gmail-wrike-tasks/` | needs the Gmail variables, `WRIKE_TASKS_ALLOWED_SENDERS`, `WRIKE_TOKEN`, the Jira variables and `OPENAI_API_KEY`; does nothing without them, and writes only with `--apply` |
+| Duty | `duties/freshdesk_bugs.py` | `FRESHDESK_BUGS_ENABLED=true` |
+| Duty | `duties/wrike_tasks.py` | `WRIKE_TASKS_ENABLED=true`; it writes to Jira only with `WRIKE_TASKS_WRITE_TO_JIRA=true` |
+
+Each skill's `SKILL.md` lists every variable it reads.

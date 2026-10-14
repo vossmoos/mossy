@@ -1,0 +1,6 @@
+# The invocation ledger is local evidence, not source: disposable, and noise in a diff.
+logs/
+
+# Coverage data is a local measurement artefact, not source.
+.coverage
+coverage.json

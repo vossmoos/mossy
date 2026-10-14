@@ -1,0 +1,55 @@
+{
+  "64": {
+    "description": "<div style=\"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; font-size:14px\"><div dir=\"ltr\">Guten Tag<br><br>Bitte um Ausmass für die Duschwand an der Baustelle.<br>Die Firma Fremd Montage GmbH hat die Vorarbeiten gemacht.<br><br>Freundliche Grüsse<br><br>Jonas Beispiel<br>SAXAG Test AG<br>Abteilung Einkauf<br>Luzernstrasse 12, 6014 Luzern<br>Tel. +41 41 000 00 01<br><a href=\"http://www.saxag.example.ch\" rel=\"noreferrer\">www.saxag.example.ch</a><br>CHE-123.456.789 MWST<br><br>Von: Dritte Firma AG &lt;info@dritte-firma.example.ch&gt;<br>Gesendet: Montag, 18. August 2026<br>An: Jonas Beispiel<br><br>Guten Tag, anbei die Unterlagen.<br><br>Dritte Firma AG<br>Bahnhofstrasse 5, 8001 Zürich<br>Tel. +41 44 999 99 99<br><a href=\"http://www.dritte-firma.example.ch\" rel=\"noreferrer\">www.dritte-firma.example.ch</a></div></div>",
+    "description_text": "Guten Tag  Bitte um Ausmass für die Duschwand an der Baustelle. Die Firma Fremd Montage GmbH hat die Vorarbeiten gemacht.  Freundliche Grüsse  Jonas Beispiel SAXAG Test AG Abteilung Einkauf Luzernstrasse 12, 6014 Luzern Tel. +41 41 000 00 01 www.saxag.example.ch CHE-123.456.789 MWST  Von: Dritte Firma AG <info@dritte-firma.example.ch> Gesendet: Montag, 18. August 2026 An: Jonas Beispiel  Guten Tag, anbei die Unterlagen.  Dritte Firma AG Bahnhofstrasse 5, 8001 Zürich Tel. +41 44 999 99 99 www.dritte-firma.example.ch",
+    "id": 64,
+    "requester_email": "jonas.beispiel@saxag.example.ch",
+    "subject": "Test"
+  },
+  "65": {
+    "description": "<div style=\"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; font-size:14px\"><div dir=\"ltr\">Guten Tag<br><br>Bitte um Ausmass für die Duschwand an der Baustelle.<br><br>Freundliche Grüsse<br><br>Jonas Beispiel<br>SAXAG Test AG<br>Luzernstrasse 12, 6014 Luzern<br>Tel. +41 41 000 00 01<br><a href=\"http://www.saxag.example.ch\" rel=\"noreferrer\">www.saxag.example.ch</a><br><br>Von: Dritte Firma AG &lt;info@dritte-firma.example.ch&gt;<br>Gesendet: Montag, 18. August 2026<br><br>Dritte Firma AG<br>Bahnhofstrasse 5, 8001 Zürich<br>Tel. +41 44 999 99 99<br><a href=\"http://www.dritte-firma.example.ch\" rel=\"noreferrer\">www.dritte-firma.example.ch</a></div></div>",
+    "description_text": "Guten Tag  Bitte um Ausmass für die Duschwand an der Baustelle.  Freundliche Grüsse  Jonas Beispiel SAXAG Test AG Luzernstrasse 12, 6014 Luzern Tel. +41 41 000 00 01 www.saxag.example.ch  Von: Dritte Firma AG <info@dritte-firma.example.ch> Gesendet: Montag, 18. August 2026  Dritte Firma AG Bahnhofstrasse 5, 8001 Zürich Tel. +41 44 999 99 99 www.dritte-firma.example.ch",
+    "id": 65,
+    "requester_email": "jonas.beispiel@saxag.example.ch",
+    "subject": "PRUEBA DE ASUNTO"
+  },
+  "84": {
+    "description": "<div style=\"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; font-size:14px\"><div dir=\"ltr\">Guten Tag<br><br>Wann können Sie vorbeikommen? Ich brauche einen Termin nächste Woche.</div></div>",
+    "description_text": "Guten Tag  Wann können Sie vorbeikommen? Ich brauche einen Termin nächste Woche.",
+    "group_id": 205000069063,
+    "id": 84,
+    "priority": 1,
+    "requester_email": "hans@keine-signatur.example.ch",
+    "requester_id": 205014440008,
+    "spam": false,
+    "status": 2,
+    "subject": "TESTEO HOLA",
+    "tags": []
+  },
+  "85": {
+    "description": "<div style=\"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; font-size:14px\"><div dir=\"ltr\">Guten Tag<br><br>Siehe unten, bitte um Ausmass.<br><br>Freundliche Grüsse<br><br>Eva Weber<br>Erste Firma Test AG<br>Erstweg 1, 8000 Zürich<br><br>Von: Zweite Firma AG &lt;info@zweite-firma.example.ch&gt;<br>Gesendet: Mittwoch, 19. August 2026<br><br>Guten Tag, anbei weitergeleitet.<br><br>Zweite Firma AG<br>Zweitstrasse 2, 3000 Bern<br>Tel. +41 31 222 22 22<br><br>-----Ursprüngliche Nachricht-----<br>Von: Dritte Firma GmbH &lt;kontakt@dritte-firma-gmbh.example.ch&gt;<br>Gesendet: Dienstag, 18. August 2026<br><br>Anbei die Unterlagen.<br><br>Dritte Firma GmbH<br>Drittplatz 3, 6000 Luzern<br>Tel. +41 41 333 33 33</div></div>",
+    "description_text": "Guten Tag  Siehe unten, bitte um Ausmass.  Freundliche Grüsse  Eva Weber Erste Firma Test AG Erstweg 1, 8000 Zürich  Von: Zweite Firma AG <info@zweite-firma.example.ch> Gesendet: Mittwoch, 19. August 2026  Guten Tag, anbei weitergeleitet.  Zweite Firma AG Zweitstrasse 2, 3000 Bern Tel. +41 31 222 22 22  -----Ursprüngliche Nachricht----- Von: Dritte Firma GmbH <kontakt@dritte-firma-gmbh.example.ch> Gesendet: Dienstag, 18. August 2026  Anbei die Unterlagen.  Dritte Firma GmbH Drittplatz 3, 6000 Luzern Tel. +41 41 333 33 33",
+    "group_id": 205000069063,
+    "id": 85,
+    "priority": 1,
+    "requester_email": "eva@erste-firma.example.ch",
+    "requester_id": 205014440054,
+    "spam": false,
+    "status": 2,
+    "subject": "testeo +",
+    "tags": []
+  },
+  "86": {
+    "description": "<div style=\"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif; font-size:14px\"><div dir=\"ltr\">Guten Tag<br><br>Bitte um Ausmass für zwei Objekte.<br><br>Freundliche Grüsse<br><br>Mia Lang<br>Doppel Haustechnik AG<br>Hauptsitz: Zentralweg 10, 8000 Zürich<br>Filiale: Nebenstrasse 5, 4000 Basel<br>Tel. +41 44 111 11 11<br>Tel. +41 61 222 22 22</div></div>",
+    "description_text": "Guten Tag  Bitte um Ausmass für zwei Objekte.  Freundliche Grüsse  Mia Lang Doppel Haustechnik AG Hauptsitz: Zentralweg 10, 8000 Zürich Filiale: Nebenstrasse 5, 4000 Basel Tel. +41 44 111 11 11 Tel. +41 61 222 22 22",
+    "group_id": 205000069063,
+    "id": 86,
+    "priority": 1,
+    "requester_email": "mia@doppel.example.ch",
+    "requester_id": 205014440132,
+    "spam": false,
+    "status": 2,
+    "subject": "Testeo b",
+    "tags": []
+  }
+}

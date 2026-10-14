@@ -1,0 +1,81 @@
+Delivered-To: agent@example.com
+Received: by 2002:a05:7412:29a9:b0:1e7:525b:1a5d with SMTP id
+ s41csp4208197rda;        Tue, 1 Sep 2026 00:34:35 -0700 (PDT)
+X-Received: by 2002:a05:600c:a012:b0:49c:d818:8764 with SMTP id
+ 5b1f17b1804b1-49cd81887aemr176351715e9.11.1788248075559;        Tue, 01 Sep
+ 2026 00:34:35 -0700 (PDT)
+Return-Path:
+ <bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com>
+Return-Path:
+ bounces+euc.1.1000000-support=example.freshdesk.com@mail.example.com
+Date: Tue, 01 Sep 2026 07:34:34 +0000
+From: Example Support <support@example.freshdesk.com>
+To: agent@example.com
+Message-ID: <9e2ffaba-8dce-4b56-98e1-b30f8ca56fef.1000000.101.2.900000000002@thread-notification.freshdesk.com>
+Subject: Mentioned in private in 101 - Test mention EX-135
+MIME-Version: 1.0
+Auto-Submitted: auto-generated
+X-FD-Account-Id: 1000000
+X-FD-Ticket-Id: 101
+X-FD-Type: 31
+X-FD-Note-Id: 900000000002
+X-Auto-Response-Suppress: DR, RN, OOF, AutoReply
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+<div style=3D"border: 1px solid #F5F7F9; color: #475867;background-color: #F5=
+F7F9;"><div style=3D"padding: 24px 24px 0 24px; font-size: 16px; background-c=
+olor: #F5F7F9; color: #475867; font-weight: 400;"><h4 style=3D"color:#12344d;=
+ display: inline; font-weight: 700">Hi </h4><p style=3D"line-height: 24px;">T=
+est Agent tagged you in a <a style=3D"color: #2C5CC5;" href=3D"https://exampl=
+e.freshdesk.com/a/tickets/101?thread=3D2&follow=3Demail">thread</a> and wants=
+ you to have a look.</p></div><div style=3D"padding: 24px; background: #FFFFF=
+F; color: #3F4551;margin: 16px;border-radius: 8px"><strong style=3D"font-size=
+: 16px;font-weight: 700">Subject : Test mention EX-135</strong><div style=3D"=
+font-size: 14px;margin-top:10px"><p style=3D"padding: 2px 8px 2px 8px;border-=
+radius: 4px;border: 1px solid #FDDBB5;background: #FEF1E1;width: fit-content;=
+color: #C13E1B;font-size: 12px;font-weight:600">Thread message</p><p></p><div=
+ style=3D"font-family:-apple-system, BlinkMacSystemFont, Segoe UI, Roboto, He=
+lvetica Neue, Arial, sans-serif; font-size:14px"><div>
+<span class=3D"inserted-agents fr-deletable fr-tribute" id=3D"inserted-agents=
+-id-3">Test Agent</span> The triage agent is misclassifying tickets that arri=
+ve with a PDF attachment when the subject line is written in French. We have =
+seen this happen at least four times in the last two weeks, and each time the=
+ ticket ends up in the manual review queue instead of being processed automat=
+ically, which defeats the whole purpose of having the agent in the first plac=
+e. The customers affected were all from the Romandy region, so this looks lik=
+e a language detection problem rather than a document parsing problem, but we=
+ have not confirmed that yet and it would be good if someone could look at th=
+e logs to understand what is actually happening before we jump to conclusions=
+.<br><br>There is a second issue that may or may not be related. When the age=
+nt does classify the ticket correctly and posts its private note, the note so=
+metimes appears twice in the thread. It is not a duplicate in the sense of tw=
+o different notes with the same content, it is literally the same note render=
+ed twice, and refreshing the page makes one of them disappear. This might be =
+a display problem on the Freshdesk side rather than something the agent is do=
+ing wrong, but our support team has started to lose confidence in the notes b=
+ecause of it, and a couple of people have told me they now double check every=
+thing the agent writes, which slows them down considerably and makes the auto=
+mation less useful than it should be.<br><br>Finally, and this is more of a r=
+equest than a bug report, it would help a lot if the private note included a =
+short line explaining why the agent reached the classification it reached. Ri=
+ght now the note shows the extracted data but not the reasoning, so when the =
+classification is wrong there is no way for the person reading it to understa=
+nd what went wrong without going to the logs, and most of our support agents =
+do not have access to the logs and would not know what to look for even if th=
+ey did. A single sentence would be enough, something like which signals in th=
+e document led to the decision.</div></div><p></p><p></p></div><div><hr style=
+=3D"color: #EBEFF3; opacity: 0.2;"><div style=3D"padding-top: 24px; font-weig=
+ht: 600;"><a style=3D"color: #FFFFFF; background: #000000; width: fit-content=
+; height: hug(37px); padding: 10px 12px 10px 10px; border-radius: 5px; text-d=
+ecoration: none; display: inline-block;" href=3D"https://example.freshdesk.co=
+m/a/tickets/101?thread=3D2&follow=3Demail">View thread and reply in Freshdesk=
+</a></div><div style=3D"font-size:12px; margin-top:8px;"><em>If the button do=
+esn't work, copy-paste this URL in your browser's address bar: </em><a style=
+=3D"color: #2C5CC5;" href=3D"https://example.freshdesk.com/a/tickets/101?thre=
+ad=3D2&follow=3Demail"><a href=3D'https://example.freshdesk.com/a/tickets/101=
+?thread=3D2&follow=3Demail'>https://example.freshdesk.com/a/tickets/101?threa=
+d=3D2&follow=3Demail</a></a></div></div></div></div><span title=3D"fd_tkt_ide=
+ntifier" style=3D'font-size:0px; font-family:"fdtktid"; min-height:0px; heigh=
+t:0px; opacity:0; max-height:0px; line-height:0px; color:#ffffff'>101:1000000=
+</span>
