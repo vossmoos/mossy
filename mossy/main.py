@@ -1,4 +1,4 @@
-"""Concurrent runtime plus optional HTTP, CLI, Slack, and MCP channels."""
+"""Concurrent runtime plus optional HTTP, CLI, Slack, MCP, A2A, and Teams channels."""
 
 from __future__ import annotations
 
@@ -26,9 +26,16 @@ async def _http(
     enable_agui: bool,
     enable_aui: bool,
     enable_mcp: bool,
+    enable_a2a: bool,
+    enable_teams: bool,
 ) -> None:
     app = create_app(
-        runtime, enable_agui=enable_agui, enable_aui=enable_aui, enable_mcp=enable_mcp
+        runtime,
+        enable_agui=enable_agui,
+        enable_aui=enable_aui,
+        enable_mcp=enable_mcp,
+        enable_a2a=enable_a2a,
+        enable_teams=enable_teams,
     )
     cfg = uvicorn.Config(app, host=host, port=port, loop="asyncio", log_level="warning")
     server = uvicorn.Server(cfg)
@@ -45,6 +52,8 @@ async def main() -> None:
     p.add_argument("--no-agui", action="store_true")
     p.add_argument("--no-aui", action="store_true")
     p.add_argument("--no-mcp", action="store_true")
+    p.add_argument("--no-a2a", action="store_true")
+    p.add_argument("--no-teams", action="store_true")
     p.add_argument("--no-duties", action="store_true")
     args = p.parse_args()
 
@@ -60,6 +69,8 @@ async def main() -> None:
                 enable_agui=not args.no_agui,
                 enable_aui=not args.no_aui,
                 enable_mcp=not args.no_mcp,
+                enable_a2a=not args.no_a2a,
+                enable_teams=not args.no_teams,
             )
         )
     if not args.no_cli:

@@ -20,6 +20,7 @@ from slack_sdk.web.async_client import AsyncWebClient
 
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
+from mossy.runtime.message_history import trim_message_history
 
 if TYPE_CHECKING:
     from mossy.runtime import Runtime
@@ -140,10 +141,8 @@ class SlackChannel:
             model,
             deps_type=RuntimeDeps,
             instructions=_SLACK_INSTRUCTIONS,
-            capabilities=runtime.shared_capabilities(exclude_skills={"filesystem"}),
             retries=3,  # recover from a failed tool call instead of breaking the run
         )
-        self.deps = RuntimeDeps(runtime=runtime)
         # Same Slack message can yield both `app_mention` and `message`; dedupe replies.
         self._delivery_dedup_lock = asyncio.Lock()
         self._delivered_event_keys: dict[str, float] = {}
@@ -233,16 +232,24 @@ class SlackChannel:
             return
         key = self._conversation_key(event)
         state = await self.histories.get_or_create(key, ConversationState)
+        user = str(event.get("user") or "").strip()
+        caller_ids = frozenset({user}) if user else frozenset()
         async with state.lock:
             try:
                 run = await run_agent_with_utc(
                     self.agent,
                     text,
-                    deps=self.deps,
-                    message_history=state.history[-self.max_history_messages :],
+                    deps=RuntimeDeps(runtime=self.runtime, caller_ids=caller_ids),
+                    capabilities=self.runtime.channel_capabilities(
+                        "SLACK", caller_ids=caller_ids, exclude_skills={"filesystem"}
+                    ),
+                    message_history=trim_message_history(
+                        state.history, self.max_history_messages
+                    ),
                 )
-                state.history += run.new_messages()
-                del state.history[:-self.max_history_messages]
+                state.history[:] = trim_message_history(
+                    state.history + run.new_messages(), self.max_history_messages
+                )
                 body = str(run.output or "").strip() or "(no output)"
             except Exception as exc:  # noqa: BLE001
                 logger.exception("Slack agent failed while handling event")

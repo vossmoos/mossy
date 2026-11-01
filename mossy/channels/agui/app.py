@@ -112,7 +112,7 @@ class AguiChannel:
         instructions = _AGUI_INSTRUCTIONS
         if extra_instructions:
             instructions = f"{instructions}\n\n{extra_instructions}"
-        capabilities: list[Any] = list(runtime.shared_capabilities())
+        capabilities: list[Any] = list(runtime.channel_capabilities("AGUI"))
         if extra_capabilities:
             capabilities.extend(extra_capabilities)
         self.agent = Agent(
@@ -124,7 +124,8 @@ class AguiChannel:
             # the error back) instead of the run dying on the first stumble.
             retries=3,
         )
-        self.deps = RuntimeDeps(runtime=runtime)
+        # One shared API key identifies no one, so web callers are anonymous for skill access.
+        self.deps = RuntimeDeps(runtime=runtime, caller_ids=frozenset())
 
     async def handle_request(self, request: Request) -> Response:
         accept = request.headers.get("accept", SSE_CONTENT_TYPE)

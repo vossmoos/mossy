@@ -21,6 +21,7 @@ from mossy.capabilities.jira import jira_capability
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.shell import shell_capability
+from mossy.capabilities.skill_access import denied_skills
 from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
 from mossy.capabilities.wrike import wrike_capability
@@ -29,9 +30,37 @@ from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, Priority, Task, TaskStatus
 from mossy.runtime.queue import TaskQueue
-from mossy.skills.selection import SkillSelection, skills_capability
+from mossy.skills.selection import ChannelSkillOptions, SkillSelection, skills_capability
 
 logger = logging.getLogger(__name__)
+
+
+def worker_excluded_skills() -> set[str]:
+    """Skills the queued worker must not receive, from ``PLATFORMER_WORKER_EXCLUDE_SKILLS``.
+
+    Comma-separated skill names; a capability gated on an excluded skill goes with it. Unset or
+    empty excludes nothing. Chat surfaces build their own capability lists and are unaffected;
+    this narrows only the queue worker, which runs with nobody reading along.
+    """
+    raw = os.getenv("PLATFORMER_WORKER_EXCLUDE_SKILLS", "")
+    return {name.strip() for name in raw.split(",") if name.strip()}
+
+
+def worker_concurrency() -> int:
+    """How many work loops pop the queue at once (``PLATFORMER_WORKER_CONCURRENCY``, default 1).
+
+    Above 1, tasks and duty ``evaluate()`` calls run side by side on the event loop, so skills and
+    duties must not rely on running one at a time. Invalid values give 1; below 1 is clamped to 1.
+    """
+    try:
+        return max(1, int(os.getenv("PLATFORMER_WORKER_CONCURRENCY", "1").strip()))
+    except ValueError:
+        return 1
+
+
+def _task_caller_ids(task: Task) -> frozenset[str] | None:
+    raw = task.context.get("caller_ids")
+    return None if raw is None else frozenset(raw)
 
 
 class Runtime:
@@ -53,7 +82,8 @@ class Runtime:
         self.inbox: asyncio.Queue[Envelope] = asyncio.Queue()
         self.tasks: dict[str, Task] = {}
         self._dedupe_keys: set[str] = set()
-        self._active_task_id: str | None = None
+        # When ``tasks`` began. Nothing removes a task from it, so counts over it are since then.
+        self.started_at = datetime.now(UTC)
         if enable_duties is None:
             enable_duties = not bool(os.getenv("PLATFORMER_DISABLE_DUTIES"))
         self.enable_duties = enable_duties
@@ -62,18 +92,23 @@ class Runtime:
         self._live_duties = asyncio.Event()
         self._worker_model = os.getenv("PLATFORMER_SKILL_MODEL", "openai:gpt-5.4-mini")
         self._worker: Agent[RuntimeDeps, str] | None = None
+        self._channel_capabilities: dict[tuple[str, frozenset[str]], list[Any]] = {}
 
     def skills_capability(
         self,
         *,
         allow_skills: SkillSelection = "all",
         exclude_skills: Collection[str] | None = None,
+        direct_scripts: bool = False,
+        max_script_results: int | None = None,
     ) -> SkillsCapability:
         return skills_capability(
             self.skills_roots,
             allow=allow_skills,
             exclude=exclude_skills,
-            auto_reload=True,
+            auto_reload=not direct_scripts,
+            direct_scripts=direct_scripts,
+            max_script_results=max_script_results,
         )
 
     def shared_capabilities(
@@ -81,12 +116,16 @@ class Runtime:
         *,
         allow_skills: SkillSelection = "all",
         exclude_skills: Collection[str] | None = None,
+        direct_scripts: bool = False,
+        max_script_results: int | None = None,
     ) -> list[Any]:
         capabilities: list[Any] = [
             personality_capability(),
             self.skills_capability(
                 allow_skills=allow_skills,
                 exclude_skills=exclude_skills,
+                direct_scripts=direct_scripts,
+                max_script_results=max_script_results,
             ),
         ]
         if self._allows_skill_tools(
@@ -146,6 +185,31 @@ class Runtime:
         ):
             capabilities.append(shell_capability())
         return capabilities
+
+    def channel_capabilities(
+        self,
+        channel: str,
+        *,
+        caller_ids: frozenset[str] = frozenset(),
+        exclude_skills: Collection[str] | None = None,
+    ) -> list[Any]:
+        """Capabilities for one chat caller on a channel.
+
+        Applies the channel's ``<CHANNEL>_*`` skill options and per-user skill access. With no
+        ``caller_ids`` the caller is anonymous, so every restricted skill is withheld. Cached per
+        channel and set of excluded skills: callers with the same access share one list.
+        """
+        excluded = frozenset(exclude_skills or ()) | denied_skills(caller_ids)
+        key = (channel, excluded)
+        if key not in self._channel_capabilities:
+            options = ChannelSkillOptions.from_env(channel)
+            self._channel_capabilities[key] = self.shared_capabilities(
+                allow_skills=options.allow_skills,
+                exclude_skills=excluded,
+                direct_scripts=options.direct_scripts,
+                max_script_results=options.max_script_results,
+            )
+        return self._channel_capabilities[key]
 
     def _allows_skill_tools(
         self,
@@ -326,13 +390,18 @@ class Runtime:
         task.status = TaskStatus.RUNNING
         task.error = None
         task.result = {}
-        self._active_task_id = task.id
         try:
             if task.context.get("kind") == "evaluate_duty":
                 await self._execute_duty(task)
                 return
-            deps = RuntimeDeps(runtime=self, task=task)
-            capabilities = [worker_state_capability(task), *self.shared_capabilities()]
+            caller_ids = _task_caller_ids(task)
+            deps = RuntimeDeps(runtime=self, task=task, caller_ids=caller_ids)
+            capabilities = [
+                worker_state_capability(task),
+                *self.shared_capabilities(
+                    exclude_skills=worker_excluded_skills() | denied_skills(caller_ids)
+                ),
+            ]
             run = await run_agent_with_utc(
                 self.worker, task.goal, deps=deps, capabilities=capabilities
             )
@@ -343,8 +412,6 @@ class Runtime:
             task.status = TaskStatus.FAILED
             task.error = str(exc)
             task.result = {**(task.result or {}), "error": str(exc)}
-        finally:
-            self._active_task_id = None
 
     async def _execute_duty(self, task: Task) -> None:
         from mossy.duties import get_duty
@@ -398,13 +465,18 @@ class Runtime:
             return
         data = task.result or {}
         if task.status == TaskStatus.DONE and data.get("follow_up_goal"):
+            # The model writes follow_up_context, so the caller comes from the parent task only.
+            child_context = dict(data.get("follow_up_context") or {})
+            child_context.pop("caller_ids", None)
+            if "caller_ids" in task.context:
+                child_context["caller_ids"] = task.context["caller_ids"]
             child = Task(
                 id=str(uuid.uuid4()),
                 goal=str(data["follow_up_goal"]),
                 priority=int(data.get("follow_up_priority", Priority.AUTONOMOUS)),
                 depends_on=list(data.get("follow_up_depends_on") or []),
                 not_before=data.get("follow_up_not_before"),
-                context=dict(data.get("follow_up_context") or {}),
+                context=child_context,
             )
             self.tasks[child.id] = child
             await self.queue.push(child)
@@ -416,7 +488,7 @@ class Runtime:
                 await self.queue.push(idle)
 
     async def start(self) -> None:
-        loops = [self.inbox_loop(), self.work_loop()]
+        loops = [self.inbox_loop(), *(self.work_loop() for _ in range(worker_concurrency()))]
         if self.enable_duties:
             loops.append(self.duty_loop())
         await asyncio.gather(*loops)

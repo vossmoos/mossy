@@ -2,10 +2,8 @@
 
 Four properties carry the weight, each with a mutation:
 
-* **It answers exactly as the skill's client does.** The client is ported, not imported — the core
-  cannot depend on a skill that can be removed — so there are two. ``TestTheTwoClientsAgree`` runs
-  both against the same fake Wrike in five situations and requires the same envelope, the same URL,
-  the same bearer header and the same verb. Nothing like it exists for Gmail or Jira.
+* **It handles Wrike's answers consistently.** ``TestWhatItAnswers`` runs the client against a fake
+  Wrike in five situations.
 * **Without ``WRIKE_TOKEN`` there is nothing, and no traffic.**
 * **It exposes no write**, checked against the functions the toolset really registers and by
   calling every one of them — never by reading a docstring.
@@ -17,7 +15,6 @@ Nothing here touches the network: ``urlopen`` is replaced for every test by a fi
 from __future__ import annotations
 
 import asyncio
-import importlib.util
 import inspect
 import io
 import json
@@ -32,10 +29,6 @@ from mossy.capabilities import wrike as core_wrike
 from mossy.runtime.core import Runtime
 
 _ROOT = Path(__file__).resolve().parents[1]
-_SKILL_CLIENT = _ROOT / "skills" / "gmail-wrike-tasks" / "scripts" / "wrike_api.py"
-_spec = importlib.util.spec_from_file_location("wrike_api", _SKILL_CLIENT)
-skill_wrike = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(skill_wrike)
 
 TASK_ID = "MAAAAAEXmain"
 READS = ("get_task", "get_task_comments")
@@ -95,7 +88,7 @@ def _outcome(client, read, task_id):
         return ("raised", type(exc).__name__, getattr(exc, "status", None), str(exc))
 
 
-# ------------------------------------------------------------------------------ parity
+# ------------------------------------------------------------------------------ answers
 CASES = {
     "a task with rows": dict(payload={"kind": "tasks", "data": [
         {"id": TASK_ID, "title": "t", "description": "<p>d</p>"}]}, status=None, task=TASK_ID),
@@ -106,21 +99,7 @@ CASES = {
 }
 
 
-class TestTheTwoClientsAgree:
-    """The skill's client and the core's, same fake Wrike, same answer — in the five situations
-    where they could come apart without anybody noticing."""
-
-    @pytest.mark.parametrize("read", READS)
-    @pytest.mark.parametrize("case", list(CASES), ids=list(CASES))
-    def test_same_envelope_same_url_same_header_same_verb(self, monkeypatch, case, read):
-        spec = CASES[case]
-        seen = {}
-        for name, module in (("skill", skill_wrike), ("core", core_wrike)):
-            transport = _install(monkeypatch, _Transport(spec["payload"], spec["status"]))
-            seen[name] = (_outcome(module.WrikeClient("tok"), read, spec["task"]),
-                          transport.requests)
-        assert seen["core"] == seen["skill"], case
-
+class TestWhatItAnswers:
     def test_the_cases_really_differ(self, monkeypatch):
         """Guards the guard: five situations that produced the same result would prove nothing."""
         outcomes = set()

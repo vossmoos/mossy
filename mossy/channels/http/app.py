@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -85,6 +85,8 @@ def create_app(
     enable_agui: bool = True,
     enable_aui: bool = True,
     enable_mcp: bool = True,
+    enable_a2a: bool = True,
+    enable_teams: bool = True,
 ) -> FastAPI:
     mcp_channel = None
     if enable_mcp:
@@ -92,12 +94,17 @@ def create_app(
 
         mcp_channel = McpChannel(runtime)
 
+    # A2A ships a Starlette sub-app with a background worker whose lifespan Starlette will not run
+    # for a mounted app on its own, so it is entered here. Empty unless the channel is mounted.
+    mounted_lifespans: list[Any] = []
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        if mcp_channel is None:
-            yield
-            return
-        async with mcp_channel.session_lifespan():
+        async with AsyncExitStack() as stack:
+            if mcp_channel is not None:
+                await stack.enter_async_context(mcp_channel.session_lifespan())
+            for sub in mounted_lifespans:
+                await stack.enter_async_context(sub.router.lifespan_context(sub))
             yield
 
     app = FastAPI(title="mossy", lifespan=lifespan)
@@ -113,12 +120,28 @@ def create_app(
         jira_path = _normalize_path(configured_webhook_path())
         jira_webhook_exempt = frozenset({jira_path})
 
+    # Other agents read the A2A card to learn who this is before they have a key. Only the card:
+    # the channel checks its own bearer on everything else.
+    a2a_exempt = frozenset()
+    if enable_a2a:
+        from mossy.channels.a2a import A2A_CARD_URL_PATH
+
+        a2a_exempt = frozenset({_normalize_path(A2A_CARD_URL_PATH)})
+
+    # The Bot Framework adapter authenticates Teams requests with its own signed tokens.
+    teams_exempt = frozenset()
+    if enable_teams:
+        from mossy.channels.teams.config import teams_configured, teams_path
+
+        if teams_configured():
+            teams_exempt = frozenset({_normalize_path(teams_path())})
+
     api_key = _configured_api_key()
     if api_key:
         app.add_middleware(
             ApiKeyMiddleware,
             api_key=api_key,
-            exempt_paths=_auth_exempt_paths(extra=jira_webhook_exempt),
+            exempt_paths=_auth_exempt_paths(extra=jira_webhook_exempt | a2a_exempt | teams_exempt),
         )
         if jira_webhook_exempt:
             print(
@@ -167,6 +190,18 @@ def create_app(
             file=sys.stderr,
             flush=True,
         )
+
+    if enable_a2a:
+        from mossy.channels.a2a import register_a2a_routes
+
+        a2a_app = register_a2a_routes(app, runtime)
+        if a2a_app is not None:
+            mounted_lifespans.append(a2a_app)
+
+    if teams_exempt:
+        from mossy.channels.teams import register_teams_routes
+
+        register_teams_routes(app, runtime)
 
     @app.post("/run")
     async def run_task(body: RunBody) -> dict[str, str | None]:
