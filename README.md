@@ -7,7 +7,7 @@ Mossy is a ready-to-run agent with a tiny core and a powerful skill engine insid
 - **Skill-first.** Every new behavior is a skill folder — a `SKILL.md` in the open agentic skills format, plus any scripts or assets the skill needs. No bespoke API to memorize.
 - **Tiny core.** A few hundred lines of Python on top of [`pydantic-ai`](https://github.com/pydantic/pydantic-ai). You can ignore it and just write skills.
 - **Works out of the box.** Worker, queue, CLI chat, and HTTP API are already wired up. Run `python main.py` and you have an agent.
-- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), Slack (Socket Mode), and MCP (`/mcp`, `ask_mossy` for Claude Desktop/Code) ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
+- **Extensible channels.** CLI, HTTP, AG-UI (SSE web chat), web chat (`/ui`), an adaptive UI (`/aui`, chat + skill-driven widget panel), Slack (Socket Mode), MCP (`/mcp`, `ask_mossy` for Claude Desktop/Code), A2A (`/a2a`, for other agents), and Microsoft Teams ship in the box. Add Telegram or any other connector as a module under `mossy/channels/` — anything that produces an `Envelope` plugs into the same inbox.
 - **Adaptive UI.** Skills can render interactive widget boxes next to the chat — cards, tables, progress, logs, documents — with zero frontend changes per skill. See below.
 - **Team-ready.** Agents enqueue work for each other, set priorities, and chain tasks across any channel.
 
@@ -30,6 +30,8 @@ A handful of small pieces, each doing one thing.
   - `aui/app.py` — adaptive UI (`GET /aui`): chat plus a skill-driven widget panel. See `mossy/channels/aui/README.md`.
   - `slack/app.py` — Slack Socket Mode bot that replies to `@`-mentions in channels and DMs, with per-thread in-memory history. See `mossy/channels/slack/README.md` for setup.
   - `mcp/app.py` — MCP Streamable HTTP server (`/mcp`) exposing `ask_mossy` so Claude Desktop/Code can talk to Mossy like web chat. See `mossy/channels/mcp/README.md`.
+  - `a2a/app.py` — A2A endpoint (`/a2a`) where other agents discover Mossy and ask it questions, read-only by default. See `mossy/channels/a2a/README.md`.
+  - `teams/app.py` — Microsoft Teams Bot Framework endpoint (`POST /api/messages`), an optional install. See `mossy/channels/teams/README.md`.
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
 That's the whole platform. Everything else is a skill.
@@ -78,6 +80,8 @@ python main.py --no-slack       # disable the Slack channel
 python main.py --no-agui        # disable the AG-UI web chat endpoint
 python main.py --no-aui         # disable the adaptive UI channel
 python main.py --no-mcp         # disable the MCP endpoint (ask_mossy)
+python main.py --no-a2a         # disable the A2A endpoint
+python main.py --no-teams       # disable the Teams endpoint
 python main.py --no-duties      # disable the duty sentinel loop
 python main.py --port 9000      # change HTTP port
 ```
@@ -287,18 +291,47 @@ The goal text should match a skill description so the worker selects that skill.
 
 ---
 
-## Added capabilities, skills and duties
+## Running in production
 
-Everything below does nothing until its variables are set. The skills are always discovered and have no on/off switch: their scripts run only when an agent or a person calls them, and refuse to run without configuration.
+- **Parallel work.** `PLATFORMER_WORKER_CONCURRENCY` sets how many tasks run at once (default 1).
+- **A narrower worker.** `PLATFORMER_WORKER_EXCLUDE_SKILLS=shell,filesystem` keeps those tools from the worker that runs queued tasks unattended. Chat channels are unaffected.
+- **Slow scripts.** `SKILL_SCRIPT_TIMEOUT_SECONDS` sets the limit for one script (default 90).
+- **Reproducible installs.** `pip install -c requirements.lock -r requirements.txt` installs the exact tested versions. After changing a requirement, regenerate the lock with `uv pip compile --universal requirements.txt requirements-teams.txt -o requirements.lock`.
 
-| Kind | Name | What turns it on |
-|---|---|---|
-| Capability | `jira` — gains `create_issue` | `JIRA_SITE`, `JIRA_USER_EMAIL`, `JIRA_API_KEY`, `JIRA_SPACE_NAME` |
-| Capability | `wrike` — read-only: `get_task`, `get_task_comments` | `WRIKE_TOKEN` |
-| Skill | `skills/company-contact-linking/` | needs `FRESHDESK_DOMAIN`, `FRESHDESK_API_KEY`, `LINKING_ENABLED=true`, `LINKING_GROUP_IDS`, `LINKING_CONTACT_LOG_FIELD`; does nothing without them |
-| Skill | `skills/gmail-freshdesk-bugs/` | needs `GMAIL_CLIENT_ID`, `GMAIL_CLIENT_SECRET`, `GMAIL_REFRESH_TOKEN`, `GMAIL_ALLOWED_SENDERS`, plus the Freshdesk, Jira and `OPENAI_API_KEY` variables; does nothing without them |
-| Skill | `skills/gmail-wrike-tasks/` | needs the Gmail variables, `WRIKE_TASKS_ALLOWED_SENDERS`, `WRIKE_TOKEN`, the Jira variables and `OPENAI_API_KEY`; does nothing without them, and writes only with `--apply` |
-| Duty | `duties/freshdesk_bugs.py` | `FRESHDESK_BUGS_ENABLED=true` |
-| Duty | `duties/wrike_tasks.py` | `WRIKE_TASKS_ENABLED=true`; it writes to Jira only with `WRIKE_TASKS_WRITE_TO_JIRA=true` |
+### Per-user skill access
 
-Each skill's `SKILL.md` lists every variable it reads.
+```bash
+# .env
+MOSSY_SKILL_ACCESS="billing=U012ABC,00000000-aaaa-bbbb-cccc-000000000000;shell=U012ABC"
+```
+
+A named skill is limited to those callers, and enforced in code rather than in the prompt: other callers don't get the skill or any capability gated on it. Tasks a caller queues keep that caller's access.
+
+| Where the request comes from | Who it counts as |
+|---|---|
+| Slack, Teams | The caller's id: the Slack user id, or the Teams AAD object id or channel id |
+| Web chat, AG-UI, MCP | Anonymous, because one shared key identifies no one: restricted skills are withheld |
+| CLI, duties, `POST /run` | A trusted operator: nothing is withheld |
+
+So set `MOSSY_API_KEY` wherever `/run` is reachable. Restrict `shell` too, because a shell can run any skill's scripts directly. People in the same Slack or Teams thread share its history, so they can read what a restricted skill already answered there.
+
+### Per-channel skill options
+
+Each chat channel reads its own variables; the prefix is `SLACK`, `TEAMS`, `MCP` or `AGUI`.
+
+| Variable | Effect |
+|---|---|
+| `<CHANNEL>_ALLOW_SKILLS` | Comma-separated skills this channel may use (default: all) |
+| `<CHANNEL>_DIRECT_SCRIPTS` | `true` puts each `SKILL.md` in the instructions and leaves only `run_skill_script`, for faster replies. Use it with a short allow list and skills that don't need their resource files. Skills are read once, so restart after changing them. |
+| `<CHANNEL>_MAX_SCRIPT_RESULTS` | Caps the script arguments `n`, `limit`, `top_k` and `max_results` when the model passes them |
+
+---
+
+## Added capabilities
+
+These do nothing until their variables are set.
+
+| Capability | What turns it on |
+|---|---|
+| `jira` — gains `create_issue` | `JIRA_SITE`, `JIRA_USER_EMAIL`, `JIRA_API_KEY`, `JIRA_SPACE_NAME` |
+| `wrike` — read-only: `get_task`, `get_task_comments` | `WRIKE_TOKEN` |

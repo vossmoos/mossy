@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from pydantic_ai import RunContext
 from pydantic_ai.capabilities.toolset import Toolset
 from pydantic_ai.toolsets import FunctionToolset
 
@@ -18,6 +19,7 @@ def system_queue_capability(runtime: "Runtime") -> Toolset:
     """Expose queue and task lifecycle operations for the system-queue skill."""
 
     async def enqueue_task(
+        ctx: RunContext[Any],
         goal: str,
         priority: int = int(Priority.AUTONOMOUS),
         depends_on: list[str] | None = None,
@@ -27,11 +29,14 @@ def system_queue_capability(runtime: "Runtime") -> Toolset:
 
         Use scheduled_for only for future work. It must be an absolute UTC datetime.
         """
+        # The queued task keeps the caller's skill access, so queueing cannot widen it.
+        caller_ids = getattr(ctx.deps, "caller_ids", None)
         task = await runtime.submit_goal(
             goal,
             priority=priority,
             depends_on=depends_on or [],
             not_before=scheduled_for,
+            context=None if caller_ids is None else {"caller_ids": sorted(caller_ids)},
         )
         return {
             "id": task.id,

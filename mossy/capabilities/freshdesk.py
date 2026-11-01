@@ -301,7 +301,7 @@ class FreshdeskClient:
         )
 
     def primary_email_config_id(self, product_id: int) -> int | None:
-        """Primary support mailbox id for a product (matches DUSCHOLUX KI bot routing)."""
+        """Primary support mailbox id for a product."""
         try:
             status, data = self.request_json("GET", "/email_configs")
         except Exception:  # noqa: BLE001 - optional enrichment for repeat_ticket

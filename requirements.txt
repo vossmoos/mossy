@@ -1,7 +1,8 @@
-pydantic-ai>=1.90,<2
-mcp>=1.0,<3
+pydantic-ai>=1.105,<2
+mcp>=1.27,<2
+fasta2a[pydantic-ai]>=1.0,<2
 ag-ui-protocol>=0.1.18
-pydantic-ai-skills>=0.10
+pydantic-ai-skills>=1.4,<2
 fastapi>=0.115
 uvicorn[standard]>=0.32
 pydantic>=2
@@ -12,5 +13,3 @@ slack-sdk
 # simxp-ehr skill: YAML patient model + C-CDA structural/XSD validation
 pyyaml>=6.0
 lxml>=5.0
-# gmail-freshdesk-bugs skill: semantic-duplicate cache
-duckdb>=1.5,<2

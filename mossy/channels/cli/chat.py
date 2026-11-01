@@ -14,6 +14,7 @@ from rich.console import Console
 from mossy.capabilities.skill_manager import skill_manager_capability
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
+from mossy.runtime.message_history import trim_message_history
 
 if TYPE_CHECKING:
     from mossy.runtime import Runtime
@@ -106,6 +107,7 @@ async def stdin_loop(runtime: "Runtime") -> None:
     )
     deps = RuntimeDeps(runtime=runtime)
     history: list[ModelMessage] = []
+    max_history_messages = int(os.getenv("CLI_HISTORY_MAX_MESSAGES", "200"))
     console = Console()
     mossy_style = _mossy_output_style()
 
@@ -125,7 +127,7 @@ async def stdin_loop(runtime: "Runtime") -> None:
             return
 
         out = await run_agent_with_utc(cli, text, deps=deps, message_history=history)
-        history += out.new_messages()
+        history = trim_message_history(history + out.new_messages(), max_history_messages)
         console.print()
         console.print(str(out.output), style=mossy_style)
         console.print()

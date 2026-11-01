@@ -32,6 +32,7 @@ else:
 
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
+from mossy.runtime.message_history import trim_message_history
 
 if TYPE_CHECKING:
     from mossy.runtime import Runtime
@@ -203,10 +204,11 @@ class McpChannel:
             _mcp_model(),
             deps_type=RuntimeDeps,
             instructions=_MCP_INSTRUCTIONS,
-            capabilities=runtime.shared_capabilities(),
+            capabilities=runtime.channel_capabilities("MCP"),
             retries=3,
         )
-        self.deps = RuntimeDeps(runtime=runtime)
+        # One shared API key identifies no one, so MCP callers are anonymous for skill access.
+        self.deps = RuntimeDeps(runtime=runtime, caller_ids=frozenset())
         bind_host = (os.getenv("PLATFORMER_HOST") or "127.0.0.1").strip() or "127.0.0.1"
         http_kwargs = dict(
             streamable_http_path="/",
@@ -261,10 +263,13 @@ class McpChannel:
                     self.agent,
                     text,
                     deps=self.deps,
-                    message_history=state.history[-self.max_history_messages :],
+                    message_history=trim_message_history(
+                        state.history, self.max_history_messages
+                    ),
                 )
-                state.history += run.new_messages()
-                del state.history[:-self.max_history_messages]
+                state.history[:] = trim_message_history(
+                    state.history + run.new_messages(), self.max_history_messages
+                )
                 body = str(run.output or "").strip() or "(no output)"
             except Exception as exc:  # noqa: BLE001
                 logger.exception("MCP ask_mossy failed")
