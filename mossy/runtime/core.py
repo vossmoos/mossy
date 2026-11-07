@@ -18,6 +18,7 @@ from mossy.capabilities.file_sharing import file_sharing_capability
 from mossy.capabilities.filesystem import filesystem_capability
 from mossy.capabilities.freshdesk import freshdesk_capability
 from mossy.capabilities.jira import jira_capability
+from mossy.capabilities.mcp_client import mcp_capabilities
 from mossy.capabilities.github import github_capabilities
 from mossy.capabilities.personality import personality_capability
 from mossy.capabilities.shell import shell_capability
@@ -172,6 +173,10 @@ class Runtime:
             exclude_skills=exclude_skills,
         ):
             capabilities.extend(github_capabilities())
+        # External MCP servers (MOSSY_MCP_SERVERS), e.g. Myco: each gated on its skill (default mcp).
+        for skill, capability in mcp_capabilities():
+            if self._allows_skill_tools(skill, allow_skills=allow_skills, exclude_skills=exclude_skills):
+                capabilities.append(capability)
         if self._allows_skill_tools(
             "file-sharing",
             allow_skills=allow_skills,

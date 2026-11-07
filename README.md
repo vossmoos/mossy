@@ -335,3 +335,33 @@ These do nothing until their variables are set.
 |---|---|
 | `jira` — gains `create_issue` | `JIRA_SITE`, `JIRA_USER_EMAIL`, `JIRA_API_KEY`, `JIRA_SPACE_NAME` |
 | `wrike` — read-only: `get_task`, `get_task_comments` | `WRIKE_TOKEN` |
+| `mcp` — tools from external MCP servers, e.g. Myco | `MOSSY_MCP_SERVERS`, `MOSSY_MCP__<NAME>__URL` |
+
+## Connected MCP servers (Myco)
+
+Mossy can take tools from any MCP server over Streamable HTTP. The main one is
+[Myco](https://github.com/vossmoos/myco): one endpoint with the company's SaaS tools and its
+memory ([etchmem](https://github.com/vossmoos/etchmem)), each curated and permission-checked.
+
+```bash
+# .env
+MOSSY_MCP_SERVERS=myco
+MOSSY_MCP__MYCO__URL=http://myco:8080/mcp
+MOSSY_MCP__MYCO__TOKEN=<this agent's Myco key>   # sent as Authorization: Bearer
+```
+
+- Each server is gated on a skill, `mcp` by default (`MOSSY_MCP__<NAME>__SKILL`), so channel
+  allow lists, `PLATFORMER_WORKER_EXCLUDE_SKILLS` and `MOSSY_SKILL_ACCESS` narrow it like any
+  other capability.
+- `MOSSY_MCP__<NAME>__HEADERS` (JSON) adds headers, `__TOOL_PREFIX` prefixes tool names,
+  `__TIMEOUT` sets seconds per request (default 30). Add more servers with more names.
+- A server that is down or refuses the key contributes no tools to that run; the chat goes on.
+- Behind Myco, Mossy is one agent: every call runs as that agent's service user in Myco's
+  `users.yaml`, and Myco decides which tools and scopes it sees. Mossy does not forward a
+  person's SSO token yet (connections are shared between runs; a per-user header needs a
+  connection per run).
+
+The `mcp` skill tells the model how to treat Myco's answers (a refusal is a decision; redacted
+fields are permissions). The `memory` skill tells it when to recall before answering and what
+to remember afterwards, using Myco's `memory_*` tools. Jira, Wrike, Freshdesk and GitHub keep
+working as before; when Myco offers the same service, the `mcp` skill prefers Myco's tools.
