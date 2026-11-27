@@ -102,6 +102,7 @@ async def stdin_loop(runtime: "Runtime") -> None:
         capabilities=[
             *runtime.shared_capabilities(exclude_skills={"filesystem"}),
             skill_manager_capability(runtime),
+            *runtime.approval_capabilities("cli"),
         ],
         retries=3,  # recover from a failed tool call instead of breaking the run
     )

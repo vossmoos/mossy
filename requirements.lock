@@ -125,6 +125,8 @@ docstring-parser==0.18.0
     # via
     #   anthropic
     #   cyclopts
+duckdb==1.5.5
+    # via -r requirements.txt
 email-validator==2.3.0
     # via pydantic
 eval-type-backport==0.4.0

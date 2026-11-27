@@ -8,7 +8,7 @@ import os
 import re
 from html import unescape
 from http import HTTPStatus
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from botbuilder.core import ActivityHandler, ShowTypingMiddleware, TurnContext
 from botbuilder.integration.aiohttp import CloudAdapter, ConfigurationBotFrameworkAuthentication
@@ -141,6 +141,25 @@ class _TeamsConfig:
         self.APP_TENANTID = os.environ.get("MicrosoftAppTenantId", "")
 
 
+def conversation_origin(activity: Any) -> dict[str, Any]:
+    """Where a conversation is, as plain data, for whoever later has to write to it.
+
+    Stored with an approval request and read by nothing in the core.
+    """
+    conversation = activity.conversation
+    return {
+        "service_url": getattr(activity, "service_url", None),
+        "channel_id": getattr(activity, "channel_id", None),
+        "conversation_id": str(conversation.id),
+        "conversation_type": getattr(conversation, "conversation_type", None),
+        "tenant_id": getattr(conversation, "tenant_id", None),
+        "activity_id": getattr(activity, "id", None),
+        "reply_to_id": getattr(activity, "reply_to_id", None),
+        "bot_id": getattr(getattr(activity, "recipient", None), "id", None),
+        "user_id": getattr(getattr(activity, "from_property", None), "id", None),
+    }
+
+
 class MossyTeamsBot(ActivityHandler):
     """Route Bot Framework activities into the Mossy Teams channel."""
 
@@ -242,9 +261,16 @@ class TeamsChannel:
                         self.agent,
                         text,
                         deps=RuntimeDeps(runtime=self.runtime, caller_ids=caller_ids),
-                        capabilities=self.runtime.channel_capabilities(
-                            "TEAMS", caller_ids=caller_ids, exclude_skills={"filesystem"}
-                        ),
+                        capabilities=[
+                            *self.runtime.channel_capabilities(
+                                "TEAMS", caller_ids=caller_ids, exclude_skills={"filesystem"}
+                            ),
+                            *self.runtime.approval_capabilities(
+                                "teams",
+                                conversation=conversation_origin(activity),
+                                caller_ids=caller_ids,
+                            ),
+                        ],
                         message_history=trim_message_history(
                             state.history, self.max_history_messages
                         ),
