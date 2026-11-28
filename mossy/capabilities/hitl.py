@@ -147,11 +147,13 @@ def chat_hitl_capability(
     channel: str,
     conversation: Any = None,
     caller_ids: frozenset[str] | None = None,
+    requester: str | None = None,
 ) -> Toolset | None:
     """The approval tool for one chat conversation, or None when no medium is configured.
 
     ``conversation`` is whatever the channel needs to find the conversation again. It is stored
-    with the request as it is given.
+    with the request as it is given. ``requester`` is how the person asking is named to the
+    approver; left out, it is the caller ids.
     """
     if not runtime.hitl.media():
         return None
@@ -179,7 +181,7 @@ def chat_hitl_capability(
                 chat_envelope(task, channel, caller_ids),
                 medium=medium,
                 summary=summary,
-                requester=_requester(caller_ids),
+                requester=requester if requester is not None else _requester(caller_ids),
                 origin_channel=channel,
                 origin_conversation=conversation,
                 dedupe_key=(dedupe_key or "").strip() or _chat_dedupe_key(channel, conversation, task),

@@ -20,8 +20,9 @@ APPROVED = "approved"
 REJECTED = "rejected"
 CANCELLED = "cancelled"
 
-#: What ``Medium.check`` may answer. Cancelling is something Mossy does, not something it reads.
-CHECK_STATUSES = (PENDING, APPROVED, REJECTED)
+#: What ``Medium.check`` may answer. A request can also be cancelled in the medium itself, by
+#: the people who decide there: that is read back as a decision, like a rejection.
+CHECK_STATUSES = (PENDING, APPROVED, REJECTED, CANCELLED)
 
 
 @dataclass(frozen=True)

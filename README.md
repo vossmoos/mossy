@@ -296,7 +296,7 @@ The goal text should match a skill description so the worker selects that skill.
 
 A task that must not run without a person's say-so is stored instead of queued, and enters the queue only once approved.
 
-1. **Submit** — `runtime.submit_for_approval(envelope, dedupe_key=...)` stores the task in DuckDB, opens it in a medium and does **not** queue it. A pending request with the same `dedupe_key` is returned instead of opening another. Agents reach this through the `request_approval` tool. The queue worker sends its active task. In a chat (CLI, Slack, Teams) there is no active task, so the agent writes it: the text is stored and shown to the approver exactly as written, and who asked and where come from the channel.
+1. **Submit** — `runtime.submit_for_approval(envelope, dedupe_key=...)` stores the task in DuckDB, opens it in a medium and does **not** queue it. A pending request with the same `dedupe_key` is returned instead of opening another. Agents reach this through the `request_approval` tool. The queue worker sends its active task. In a chat (CLI, Slack, Teams) there is no active task, so the agent writes it: the text is stored and shown to the approver exactly as written, and who asked and where come from the channel. Who asked is the caller ids, unless the channel passes a visible name as `requester`.
 2. **Review** — the `hitl_review` duty looks once a minute while anything is pending. `check()` reads the clock and the local file; every call to the medium is in `evaluate()`.
 3. **Decision** — approved: the stored task enters the queue unchanged, with the decision in `context["hitl"]`. Rejected or cancelled: the stored task is never queued. The agent gets a task with the request id, its short summary, the decision and the comment, and none of the stored task's own words.
 
@@ -311,7 +311,7 @@ class Paper(Medium):
 
     async def open(self, request):        # show it to a person; return the medium's id
         ...
-    async def check(self, external_id):   # Decision("pending" | "approved" | "rejected", by=..., comment=...)
+    async def check(self, external_id):   # Decision("pending" | "approved" | "rejected" | "cancelled", by=..., comment=...)
         ...
     async def cancel(self, external_id):  # withdraw it
         ...

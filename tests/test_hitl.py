@@ -21,7 +21,7 @@ from pydantic_ai import Agent
 from pydantic_ai.messages import ModelResponse, TextPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import FunctionModel
 
-from mossy.capabilities.hitl import hitl_capability, task_envelope
+from mossy.capabilities.hitl import chat_hitl_capability, hitl_capability, task_envelope
 from mossy.channels.cli import chat as cli_chat
 from mossy.channels.slack.app import ConversationState, SlackChannel, TTLStore
 from mossy.duties import discover_duties
@@ -34,7 +34,7 @@ from mossy.runtime.core import Runtime
 from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, Priority, Task, TaskStatus
 
-GOAL = "Set the glass thickness of article 4711 to 8 mm"
+GOAL = "Set the retention period of report 42 to 8 days"
 NOW = datetime(2026, 11, 27, 10, 0, 5, tzinfo=UTC)
 
 
@@ -203,15 +203,21 @@ def test_a_task_that_would_not_be_read_back_unchanged_is_refused(medium) -> None
 # ---------------------------------------------------------------- 3. not approved = not run
 
 
-@pytest.mark.parametrize("verdict", [REJECTED, CANCELLED])
-def test_a_task_that_is_not_approved_goes_back_as_a_decision_without_its_instructions(medium, verdict) -> None:
+@pytest.mark.parametrize(
+    "verdict, where",
+    [(REJECTED, "in the medium"), (CANCELLED, "by Mossy"), (CANCELLED, "in the medium")],
+)
+def test_a_task_that_is_not_approved_goes_back_as_a_decision_without_its_instructions(
+    medium, verdict, where
+) -> None:
     envelope = _envelope()
 
     async def scenario():
         runtime = _runtime()
-        request = await runtime.submit_for_approval(envelope, summary="Glass thickness of 4711")
-        if verdict == REJECTED:
-            medium.decisions[request.external_id] = Decision(REJECTED, by="anna", comment="wrong value")
+        request = await runtime.submit_for_approval(envelope, summary="Retention of report 42")
+        if where == "in the medium":
+            # Read back by the review, like any decision the people in the medium take.
+            medium.decisions[request.external_id] = Decision(verdict, by="anna", comment="wrong value")
             await runtime.hitl.review()
         else:
             await runtime.hitl.cancel(request.id, by="anna", comment="wrong value")
@@ -225,11 +231,11 @@ def test_a_task_that_is_not_approved_goes_back_as_a_decision_without_its_instruc
     everything = json.dumps(task.model_dump(mode="json"))
     assert GOAL not in everything
     # Nor anything of its context. ("c-9" itself is not searched for: a random id can contain it.)
-    for word in ("thickness of article", "8 mm", "nested", "conversation"):
+    for word in ("period of report", "8 days", "nested", "conversation"):
         assert word not in everything
     assert task.goal == (
         f"Approval request {request.id} was {verdict} by anna.\n"
-        "Summary: Glass thickness of 4711\n"
+        "Summary: Retention of report 42\n"
         "Comment: wrong value\n"
         "Nothing was carried out, and nothing is to be carried out for it. "
         "Tell the requester the decision."
@@ -238,18 +244,19 @@ def test_a_task_that_is_not_approved_goes_back_as_a_decision_without_its_instruc
     assert task.context == {
         HITL_CONTEXT_KEY: {
             "request_id": request.id, "status": verdict, "by": "anna",
-            "comment": "wrong value", "summary": "Glass thickness of 4711",
+            "comment": "wrong value", "summary": "Retention of report 42",
         },
         "caller_ids": ["user-1"],
         "source": "teams",
     }
     assert _store().get(request.id).status == verdict
-    assert (("cancel", "fake-1") in medium.calls) is (verdict == CANCELLED)
+    # Mossy withdraws it in the medium only when Mossy is the one cancelling.
+    assert (("cancel", "fake-1") in medium.calls) is (where == "by Mossy")
 
 
 def test_a_summary_is_one_short_line_however_it_was_written(medium) -> None:
     # The summary is the one thing of the task a rejection hands back, so the task cannot hide in it.
-    long = "Set the glass thickness\nof article 4711 to 8 mm. " * 20
+    long = "Set the retention period\nof report 42 to 8 days. " * 20
 
     async def scenario():
         runtime = _runtime()
@@ -303,9 +310,9 @@ def test_a_request_that_cannot_be_opened_is_not_left_pending(medium) -> None:
 def test_the_same_dedupe_key_returns_the_pending_request(medium) -> None:
     async def scenario():
         runtime = _runtime()
-        first = await runtime.submit_for_approval(_envelope(), dedupe_key="4711:glass:8")
-        again = await runtime.submit_for_approval(_envelope(payload="other words"), dedupe_key="4711:glass:8")
-        other = await runtime.submit_for_approval(_envelope(), dedupe_key="4711:glass:10")
+        first = await runtime.submit_for_approval(_envelope(), dedupe_key="42:retention:8")
+        again = await runtime.submit_for_approval(_envelope(payload="other words"), dedupe_key="42:retention:8")
+        other = await runtime.submit_for_approval(_envelope(), dedupe_key="42:retention:10")
         return first, again, other
 
     first, again, other = asyncio.run(scenario())
@@ -479,7 +486,7 @@ def test_a_repo_registers_its_medium_the_way_it_registers_a_duty(tmp_path, monke
 
 
 def _run_on_the_worker(runtime: Runtime, task: Task, arguments: dict | None = None) -> list:
-    arguments = {"summary": "Glass thickness of 4711", **(arguments or {})}
+    arguments = {"summary": "Retention of report 42", **(arguments or {})}
     """Run ``task`` through the real ``execute`` with a model that calls ``request_approval`` once.
 
     Returns what the tool answered, or ``["no tool"]`` when the worker was not given the tool.
@@ -543,7 +550,7 @@ def test_the_tool_sends_the_active_task_for_approval_and_returns_the_link(medium
         "user-1, user-2", "teams", "c-9"
     )
     assert request.dedupe_key == "task:active-1"
-    assert request.summary == "Glass thickness of 4711"
+    assert request.summary == "Retention of report 42"
     assert medium.shown == [GOAL]
     assert runtime.queue_depth() == 0
 
@@ -558,8 +565,8 @@ def test_the_tool_asked_twice_for_one_task_opens_one_request(medium) -> None:
 
 def test_the_tool_uses_the_dedupe_key_it_is_given(medium) -> None:
     runtime = _runtime()
-    [first] = _run_on_the_worker(runtime, _task(id="a"), {"dedupe_key": "4711:glass:8"})
-    [second] = _run_on_the_worker(runtime, _task(id="b"), {"dedupe_key": "4711:glass:8"})
+    [first] = _run_on_the_worker(runtime, _task(id="a"), {"dedupe_key": "42:retention:8"})
+    [second] = _run_on_the_worker(runtime, _task(id="b"), {"dedupe_key": "42:retention:8"})
     assert second["request_id"] == first["request_id"]
 
 
@@ -620,7 +627,7 @@ def _ask_in_chat(capabilities: list, arguments: dict) -> list:
 
 
 #: Written by the model, with its own spacing: it must come back untouched.
-CHAT_TASK = "  Set the glass thickness of article 4711 to 8 mm.\n\nThen tell the requester.\n"
+CHAT_TASK = "  Set the retention period of report 42 to 8 days.\n\nThen tell the requester.\n"
 THREAD = {"channel": "C1", "thread_ts": "1700000000.000100"}
 
 
@@ -637,7 +644,7 @@ def test_the_task_written_in_a_chat_is_stored_and_shown_exactly_as_written(mediu
     capabilities = runtime.approval_capabilities(
         "slack", conversation=THREAD, caller_ids=frozenset({"U2", "U1"})
     )
-    [answer] = _ask_in_chat(capabilities, {"task": CHAT_TASK, "summary": "Glass thickness of 4711"})
+    [answer] = _ask_in_chat(capabilities, {"task": CHAT_TASK, "summary": "Retention of report 42"})
     [request] = _store().pending()
     assert (answer["status"], answer["request_id"]) == (PENDING, request.id)
     assert answer["link"] == "https://approvals.invalid/fake-1"
@@ -649,7 +656,7 @@ def test_the_task_written_in_a_chat_is_stored_and_shown_exactly_as_written(mediu
     assert request.task_envelope().raw == {"caller_ids": ["U1", "U2"]}
     assert (request.requester, request.origin_channel) == ("U1, U2", "slack")
     assert request.origin_conversation == THREAD
-    assert request.summary == "Glass thickness of 4711"
+    assert request.summary == "Retention of report 42"
     assert runtime.queue_depth() == 0 and runtime.tasks == {}
 
 
@@ -669,6 +676,23 @@ def test_a_chat_task_runs_as_written_and_with_the_callers_access_once_approved(m
     assert task.context["caller_ids"] == ["aad-1"]
     assert task.context["source"] == "teams"
     assert task.context[HITL_CONTEXT_KEY]["status"] == APPROVED
+
+
+@pytest.mark.parametrize(
+    "requester, stored", [("Anna Example", "Anna Example"), ("", ""), (None, "aad-1, u-1")]
+)
+def test_a_channel_can_name_the_requester_instead_of_the_caller_ids(medium, requester, stored) -> None:
+    # A channel that knows a visible name passes it, and "" when it knows none: neither is replaced
+    # by the ids. Left out, the requester is the caller ids, as for every channel here.
+    runtime = _runtime()
+    capability = chat_hitl_capability(
+        runtime, channel="teams", caller_ids=frozenset({"u-1", "aad-1"}), requester=requester
+    )
+    _ask_in_chat([capability], {"task": CHAT_TASK, "summary": "s"})
+    [request] = _store().pending()
+    assert request.requester == stored
+    # Who asks is only a name for the approver: the access the task runs with is still the ids.
+    assert request.task_envelope().raw == {"caller_ids": ["aad-1", "u-1"]}
 
 
 def test_the_same_words_in_the_same_conversation_are_one_request(medium) -> None:
