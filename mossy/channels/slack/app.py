@@ -240,9 +240,16 @@ class SlackChannel:
                     self.agent,
                     text,
                     deps=RuntimeDeps(runtime=self.runtime, caller_ids=caller_ids),
-                    capabilities=self.runtime.channel_capabilities(
-                        "SLACK", caller_ids=caller_ids, exclude_skills={"filesystem"}
-                    ),
+                    capabilities=[
+                        *self.runtime.channel_capabilities(
+                            "SLACK", caller_ids=caller_ids, exclude_skills={"filesystem"}
+                        ),
+                        *self.runtime.approval_capabilities(
+                            "slack",
+                            conversation={"channel": target.channel, "thread_ts": target.thread_ts},
+                            caller_ids=caller_ids,
+                        ),
+                    ],
                     message_history=trim_message_history(
                         state.history, self.max_history_messages
                     ),

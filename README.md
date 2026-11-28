@@ -32,6 +32,7 @@ A handful of small pieces, each doing one thing.
   - `mcp/app.py` — MCP Streamable HTTP server (`/mcp`) exposing `ask_mossy` so Claude Desktop/Code can talk to Mossy like web chat. See `mossy/channels/mcp/README.md`.
   - `a2a/app.py` — A2A endpoint (`/a2a`) where other agents discover Mossy and ask it questions, read-only by default. See `mossy/channels/a2a/README.md`.
   - `teams/app.py` — Microsoft Teams Bot Framework endpoint (`POST /api/messages`), an optional install. See `mossy/channels/teams/README.md`.
+- **HITL** (`mossy/hitl/`) — a task can wait for a person's approval before it enters the queue. The request is stored in DuckDB, shown in a **medium**, and released by a duty once approved. The core ships no medium; a repo registers its own in repo-root `hitl/`. See [Human approval](#human-approval-hitl).
 - **Autonomous follow-ups** — when a task finishes, `think_next` can chain a follow-up goal or run an idle housekeeping task. Disable with `PLATFORMER_DISABLE_AUTONOMOUS=1`.
 
 That's the whole platform. Everything else is a skill.
@@ -288,6 +289,35 @@ class Ping(Duty):
 ```
 
 The goal text should match a skill description so the worker selects that skill.
+
+---
+
+## Human approval (HITL)
+
+A task that must not run without a person's say-so is stored instead of queued, and enters the queue only once approved.
+
+1. **Submit** — `runtime.submit_for_approval(envelope, dedupe_key=...)` stores the task in DuckDB, opens it in a medium and does **not** queue it. A pending request with the same `dedupe_key` is returned instead of opening another. Agents reach this through the `request_approval` tool. The queue worker sends its active task. In a chat (CLI, Slack, Teams) there is no active task, so the agent writes it: the text is stored and shown to the approver exactly as written, and who asked and where come from the channel. Who asked is the caller ids, unless the channel passes a visible name as `requester`.
+2. **Review** — the `hitl_review` duty looks once a minute while anything is pending. `check()` reads the clock and the local file; every call to the medium is in `evaluate()`.
+3. **Decision** — approved: the stored task enters the queue unchanged, with the decision in `context["hitl"]`. Rejected or cancelled: the stored task is never queued. The agent gets a task with the request id, its short summary, the decision and the comment, and none of the stored task's own words.
+
+A **medium** is where people decide. Three operations, registered like a duty, in a Python module under repo-root `hitl/`:
+
+```python
+from mossy.hitl import Decision, Medium, register
+
+@register
+class Paper(Medium):
+    name = "paper"
+
+    async def open(self, request):        # show it to a person; return the medium's id
+        ...
+    async def check(self, external_id):   # Decision("pending" | "approved" | "rejected" | "cancelled", by=..., comment=...)
+        ...
+    async def cancel(self, external_id):  # withdraw it
+        ...
+```
+
+The core ships no medium, so without one there is no tool and the duty does nothing. Requests live in `MOSSY_DUCKDB_PATH` (default `data/mossy.duckdb`) and survive a restart while pending. The queue is in memory: a task already released and not yet run is lost on a restart, like any queued task. The duty needs the sentinel loop, so `--no-duties` leaves requests unreviewed. Nothing delivers a decision to the conversation a request came from: the origin (channel and conversation) is stored with the request, and no channel can yet be asked to post to it.
 
 ---
 

@@ -17,6 +17,7 @@ from pydantic_ai_skills import SkillsCapability
 from mossy.capabilities.file_sharing import file_sharing_capability
 from mossy.capabilities.filesystem import filesystem_capability
 from mossy.capabilities.freshdesk import freshdesk_capability
+from mossy.capabilities.hitl import chat_hitl_capability, hitl_capability
 from mossy.capabilities.jira import jira_capability
 from mossy.capabilities.mcp_client import mcp_capabilities
 from mossy.capabilities.github import github_capabilities
@@ -27,6 +28,8 @@ from mossy.capabilities.system_queue import system_queue_capability
 from mossy.capabilities.worker_state import worker_state_capability
 from mossy.capabilities.wrike import wrike_capability
 from mossy.duties.base import EnqueueRequest
+from mossy.hitl.flow import HitlFlow
+from mossy.hitl.store import ApprovalRequest
 from mossy.runtime.agent_run import run_agent_with_utc
 from mossy.runtime.deps import RuntimeDeps
 from mossy.runtime.models import Envelope, Priority, Task, TaskStatus
@@ -94,6 +97,8 @@ class Runtime:
         self._worker_model = os.getenv("PLATFORMER_SKILL_MODEL", "openai:gpt-5.4-mini")
         self._worker: Agent[RuntimeDeps, str] | None = None
         self._channel_capabilities: dict[tuple[str, frozenset[str]], list[Any]] = {}
+        # Tasks waiting for a person's approval. They are on disk, not in ``tasks`` or the queue.
+        self.hitl = HitlFlow(self)
 
     def skills_capability(
         self,
@@ -216,6 +221,23 @@ class Runtime:
             )
         return self._channel_capabilities[key]
 
+    def approval_capabilities(
+        self,
+        channel: str,
+        *,
+        conversation: Any = None,
+        caller_ids: frozenset[str] | None = None,
+    ) -> list[Any]:
+        """The approval tool for one chat conversation: a list to append, empty with no medium.
+
+        Not part of ``channel_capabilities``, which is shared between callers: this one knows who
+        is asking and where. ``conversation`` is the channel's own data, stored as it is given.
+        """
+        capability = chat_hitl_capability(
+            self, channel=channel, conversation=conversation, caller_ids=caller_ids
+        )
+        return [] if capability is None else [capability]
+
     def _allows_skill_tools(
         self,
         skill_name: str,
@@ -273,6 +295,13 @@ class Runtime:
         self.tasks[task.id] = task
         await self.queue.push(task)
         return task
+
+    async def submit_for_approval(self, envelope: Envelope, **options: Any) -> ApprovalRequest:
+        """Store the task and show it to a person instead of queueing it.
+
+        It enters the queue only once approved, unchanged. See ``mossy/hitl/flow.py``.
+        """
+        return await self.hitl.submit(envelope, **options)
 
     def task_from_envelope(self, envelope: Envelope) -> Task:
         priority = envelope.priority if envelope.priority is not None else int(Priority.USER_INPUT)
@@ -401,8 +430,11 @@ class Runtime:
                 return
             caller_ids = _task_caller_ids(task)
             deps = RuntimeDeps(runtime=self, task=task, caller_ids=caller_ids)
+            # Absent unless a HITL medium is configured.
+            approval = hitl_capability(self, task)
             capabilities = [
                 worker_state_capability(task),
+                *([approval] if approval is not None else []),
                 *self.shared_capabilities(
                     exclude_skills=worker_excluded_skills() | denied_skills(caller_ids)
                 ),
